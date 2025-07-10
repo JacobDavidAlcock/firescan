@@ -48,7 +48,7 @@ You can install `firescan` in one of two ways:
 **1. From Source (Recommended for Go users):**
 
 ```bash
-go install [github.com/JacobDavidAlcock/firescan@latest](https://github.com/JacobDavidAlcock/firescan@latest)
+go install github.com/JacobDavidAlcock/firescan@latest
 ```
 
 **2. From Pre-compiled Binaries:**
