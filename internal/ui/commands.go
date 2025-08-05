@@ -10,7 +10,9 @@ import (
 
 	"firescan/internal/auth"
 	"firescan/internal/config"
+	"firescan/internal/rules"
 	"firescan/internal/scanner"
+	"firescan/internal/services"
 	"firescan/internal/types"
 	"firescan/internal/wordlist"
 )
@@ -167,7 +169,7 @@ func HandleAuth(args []string) {
 	fmt.Printf("%s✓ Successfully authenticated. Token has been set.%s\n", types.ColorGreen, types.ColorReset)
 }
 
-// HandleScan handles the 'scan' command exactly as in original
+// HandleScan handles the 'scan' command with new safety modes
 func HandleScan(args []string) {
 	scanFlags := flag.NewFlagSet("scan", flag.ContinueOnError)
 	list := scanFlags.String("l", "all", "Wordlist keyword (defaults to 'all') or file path.")
@@ -177,10 +179,50 @@ func HandleScan(args []string) {
 	storageTest := scanFlags.Bool("storage", false, "Enable Cloud Storage enumeration.")
 	functionsTest := scanFlags.Bool("functions", false, "Enable Cloud Functions enumeration.")
 	hostingTest := scanFlags.Bool("hosting", false, "Check for public firebase.json config file.")
+	
+	// New safety mode flags
+	probeMode := scanFlags.Bool("probe", false, "Explicit probe mode (default, safe read-only).")
+	testMode := scanFlags.Bool("test", false, "Test mode with safe write operations and cleanup.")
+	auditMode := scanFlags.Bool("audit", false, "Audit mode with deep testing (requires confirmation).")
+	
+	// New feature flags
+	rulesTest := scanFlags.Bool("rules", false, "Enable security rules testing.")
+	writeTest := scanFlags.Bool("write", false, "Enable write access testing (requires test mode).")
+	servicesTest := scanFlags.Bool("services", false, "Enable Firebase services enumeration.")
+	
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
 
 	scanFlags.Parse(args)
+
+	// Determine scan mode
+	var scanMode types.ScanMode = types.ProbeMode // Default to probe mode
+	modeCount := 0
+	
+	if *probeMode {
+		scanMode = types.ProbeMode
+		modeCount++
+	}
+	if *testMode {
+		scanMode = types.TestMode
+		modeCount++
+	}
+	if *auditMode {
+		scanMode = types.AuditMode
+		modeCount++
+	}
+	
+	// Validate only one mode is specified
+	if modeCount > 1 {
+		fmt.Println("❌ Error: Only one scan mode can be specified (--probe, --test, or --audit).")
+		return
+	}
+	
+	// Validate write test requires test mode or higher
+	if *writeTest && scanMode < types.TestMode {
+		fmt.Println("❌ Error: --write flag requires --test or --audit mode.")
+		return
+	}
 
 	if *allScan {
 		*list = "all"
@@ -189,10 +231,18 @@ func HandleScan(args []string) {
 		*storageTest = true
 		*functionsTest = true
 		*hostingTest = true
+		*servicesTest = true
+		if scanMode >= types.TestMode {
+			*rulesTest = true
+		}
 	}
 
-	if !(*rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest) {
-		fmt.Println("❌ Error: No scan type specified. Use a flag like --rtdb, --firestore, --all, etc.")
+	// Check if any scan type is specified
+	hasTraditionalScans := *rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest
+	hasNewScans := *rulesTest || *writeTest || *servicesTest
+	
+	if !hasTraditionalScans && !hasNewScans {
+		fmt.Println("❌ Error: No scan type specified. Use flags like --rtdb, --firestore, --rules, --services, --all, etc.")
 		return
 	}
 
@@ -202,28 +252,215 @@ func HandleScan(args []string) {
 		return
 	}
 
-	options := scanner.ScanOptions{
-		List:          *list,
-		AllScan:       *allScan,
-		RTDBTest:      *rtdbTest,
-		FirestoreTest: *firestoreTest,
-		StorageTest:   *storageTest,
-		FunctionsTest: *functionsTest,
-		HostingTest:   *hostingTest,
-		JSONOutput:    *jsonOutput,
-		Concurrency:   *concurrency,
+	// Run traditional scans if specified
+	var traditionalFindings []types.Finding
+	if hasTraditionalScans {
+		options := scanner.ScanOptions{
+			List:          *list,
+			AllScan:       *allScan,
+			RTDBTest:      *rtdbTest,
+			FirestoreTest: *firestoreTest,
+			StorageTest:   *storageTest,
+			FunctionsTest: *functionsTest,
+			HostingTest:   *hostingTest,
+			JSONOutput:    *jsonOutput,
+			Concurrency:   *concurrency,
+		}
+
+		findings, err := scanner.RunScan(options)
+		if err != nil {
+			fmt.Printf("❌ Error during traditional scan: %v\n", err)
+			return
+		}
+		traditionalFindings = findings
 	}
 
-	findings, err := scanner.RunScan(options)
-	if err != nil {
-		fmt.Printf("❌ Error during scan: %v\n", err)
-		return
+	// Run new security tests
+	totalFindings := 0
+	totalFindings += len(traditionalFindings)
+	
+	// Rules testing
+	if *rulesTest {
+		services := []string{}
+		if *rtdbTest || *allScan {
+			services = append(services, "rtdb")
+		}
+		if *firestoreTest || *allScan {
+			services = append(services, "firestore")
+		}
+		
+		fmt.Printf("\n%s[*] Running Security Rules Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		ruleResults, err := runRulesTest(scanMode, services)
+		if err != nil {
+			fmt.Printf("❌ Error during rules testing: %v\n", err)
+		} else {
+			totalFindings += len(ruleResults)
+			if !*jsonOutput {
+				printRuleResults(ruleResults)
+			}
+		}
+	}
+	
+	// Write access testing
+	if *writeTest {
+		services := []string{}
+		if *rtdbTest || *allScan {
+			services = append(services, "rtdb")
+		}
+		if *firestoreTest || *allScan {
+			services = append(services, "firestore")
+		}
+		if *storageTest || *allScan {
+			services = append(services, "storage")
+		}
+		
+		fmt.Printf("\n%s[*] Running Write Access Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		writeResults, err := runWriteTest(scanMode, services)
+		if err != nil {
+			fmt.Printf("❌ Error during write testing: %v\n", err)
+		} else {
+			totalFindings += len(writeResults)
+			if !*jsonOutput {
+				printWriteResults(writeResults)
+			}
+		}
+	}
+	
+	// Services enumeration
+	if *servicesTest {
+		fmt.Printf("\n%s[*] Running Firebase Services Enumeration (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		serviceResults, err := runServicesTest(scanMode, []string{})
+		if err != nil {
+			fmt.Printf("❌ Error during services enumeration: %v\n", err)
+		} else {
+			totalFindings += len(serviceResults)
+			if !*jsonOutput {
+				printServiceResults(serviceResults)
+			}
+		}
 	}
 
 	if *jsonOutput {
-		PrintJSON(findings)
+		PrintJSON(traditionalFindings)
 	}
-	fmt.Printf("\n\n✅ Scan complete. Found %d vulnerabilities.\n", len(findings))
+	
+	fmt.Printf("\n\n✅ Scan complete. Found %d total findings.\n", totalFindings)
+}
+
+// runRulesTest executes security rules testing
+func runRulesTest(mode types.ScanMode, services []string) ([]types.RuleTestResult, error) {
+	return rules.TestSecurityRules(mode, services)
+}
+
+// runWriteTest executes write access testing
+func runWriteTest(mode types.ScanMode, services []string) ([]types.WriteTestResult, error) {
+	return rules.TestWriteAccess(mode, services)
+}
+
+// runServicesTest executes Firebase services enumeration
+func runServicesTest(mode types.ScanMode, serviceList []string) ([]types.ServiceEnumResult, error) {
+	return services.EnumerateServices(mode, serviceList)
+}
+
+// printRuleResults displays security rules test results
+func printRuleResults(results []types.RuleTestResult) {
+	fmt.Printf("\n%s=== Security Rules Test Results ===%s\n", types.ColorCyan, types.ColorReset)
+	
+	for _, result := range results {
+		status := "✓"
+		statusColor := types.ColorGreen
+		
+		if result.Error != nil {
+			status = "✗"
+			statusColor = types.ColorRed
+		} else if result.TestCase.Expected != result.Actual {
+			status = "⚠"
+			statusColor = types.ColorYellow
+		}
+		
+		fmt.Printf("%s%s %s%s\n", statusColor, status, result.TestCase.ID, types.ColorReset)
+		fmt.Printf("  Description: %s\n", result.TestCase.Description)
+		fmt.Printf("  Path: %s\n", result.TestCase.Path)
+		fmt.Printf("  Operation: %s\n", result.TestCase.Operation)
+		fmt.Printf("  Expected: %v, Actual: %v\n", result.TestCase.Expected, result.Actual)
+		
+		if result.Error != nil {
+			fmt.Printf("  Error: %v\n", result.Error)
+		}
+		
+		fmt.Printf("  Duration: %v\n", result.Duration)
+		fmt.Println()
+	}
+}
+
+// printWriteResults displays write access test results
+func printWriteResults(results []types.WriteTestResult) {
+	fmt.Printf("\n%s=== Write Access Test Results ===%s\n", types.ColorCyan, types.ColorReset)
+	
+	for _, result := range results {
+		status := "✓"
+		statusColor := types.ColorGreen
+		
+		if result.Error != nil {
+			status = "✗"
+			statusColor = types.ColorRed
+		} else if !result.Success {
+			status = "⚠"
+			statusColor = types.ColorYellow
+		}
+		
+		fmt.Printf("%s%s %s%s\n", statusColor, status, result.TestCase.ID, types.ColorReset)
+		fmt.Printf("  Description: %s\n", result.TestCase.Description)
+		fmt.Printf("  Service: %s\n", result.TestCase.Service)
+		fmt.Printf("  Path: %s\n", result.TestCase.Path)
+		fmt.Printf("  Operation: %s\n", result.TestCase.Operation)
+		fmt.Printf("  Success: %v\n", result.Success)
+		
+		if result.Error != nil {
+			fmt.Printf("  Error: %v\n", result.Error)
+		}
+		
+		if result.Response != nil {
+			fmt.Printf("  Response: %v\n", result.Response)
+		}
+		
+		fmt.Printf("  Duration: %v\n", result.Duration)
+		fmt.Println()
+	}
+}
+
+// printServiceResults displays Firebase services enumeration results
+func printServiceResults(results []types.ServiceEnumResult) {
+	fmt.Printf("\n%s=== Firebase Services Enumeration Results ===%s\n", types.ColorCyan, types.ColorReset)
+	
+	for _, result := range results {
+		status := "✓"
+		statusColor := types.ColorGreen
+		
+		if result.Error != nil {
+			status = "✗"
+			statusColor = types.ColorRed
+		} else if !result.Accessible {
+			status = "⚠"
+			statusColor = types.ColorYellow
+		}
+		
+		fmt.Printf("%s%s %s%s\n", statusColor, status, result.Service, types.ColorReset)
+		fmt.Printf("  Endpoint: %s\n", result.Endpoint)
+		fmt.Printf("  Accessible: %v\n", result.Accessible)
+		fmt.Printf("  Has Data: %v\n", result.HasData)
+		fmt.Printf("  Safety Level: %s\n", result.SafetyLevel.String())
+		
+		if result.Error != nil {
+			fmt.Printf("  Error: %v\n", result.Error)
+		}
+		
+		if result.DataSample != nil {
+			fmt.Printf("  Sample Data: %v\n", result.DataSample)
+		}
+		
+		fmt.Println()
+	}
 }
 
 // HandleExtract handles the 'extract' command exactly as in original
