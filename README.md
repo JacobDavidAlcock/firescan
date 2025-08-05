@@ -38,6 +38,9 @@
 - **Intelligent Wordlists:** Comes with built-in, context-specific wordlists and automatically generates case variations (`users`, `Users`, `USERS`) for thorough testing.
 - **Flexible Output:** Supports both human-readable and JSON output for easy integration with other tools.
 - **Configuration Files:** Load target configurations from a YAML file for quick setup.
+- **Session Management:** Save and resume authentication sessions for quick workflow continuity.
+- **Email Verification:** Automatic email verification for custom test accounts.
+- **Modular Architecture:** Clean, maintainable codebase with separated concerns for easy extension.
 
 ## 🚀 Getting Started
 
@@ -48,7 +51,14 @@ You can install `firescan` in one of two ways:
 **1. From Source (Recommended for Go users):**
 
 ```bash
-go install github.com/JacobDavidAlcock/firescan@latest
+git clone https://github.com/JacobDavidAlcock/firescan.git
+cd firescan
+go build cmd/firescan/main.go
+```
+
+Or install directly:
+```bash
+go install github.com/JacobDavidAlcock/firescan/cmd/firescan@latest
 ```
 
 **2. From Pre-compiled Binaries:**
