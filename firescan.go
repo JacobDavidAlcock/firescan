@@ -37,6 +37,24 @@ type State struct {
 	// Store credentials for automatic token refresh
 	Email    string `yaml:"-"`
 	Password string `yaml:"-"`
+	// Store user info for verification status
+	UserID       string `yaml:"-"`
+	EmailVerified bool   `yaml:"-"`
+}
+
+// SavedSession represents a saved authentication session
+type SavedSession struct {
+	Name      string    `yaml:"name"`
+	ProjectID string    `yaml:"projectID"`
+	APIKey    string    `yaml:"apiKey"`
+	Email     string    `yaml:"email"`
+	Password  string    `yaml:"password"`
+	SavedAt   time.Time `yaml:"savedAt"`
+}
+
+// SessionsFile represents the saved sessions file structure
+type SessionsFile struct {
+	Sessions []SavedSession `yaml:"sessions"`
 }
 
 // Finding represents a discovered vulnerability.
@@ -56,6 +74,7 @@ type Job struct {
 
 var currentState State       // Global state for the session
 var stateMutex sync.RWMutex // Mutex to protect currentState from concurrent access
+var sessionsFilePath = "firescan_sessions.yaml" // Path to saved sessions file
 
 // --- Default Wordlists & Data ---
 var defaultLists = map[string][]string{
@@ -267,12 +286,20 @@ var functionRegions = []string{"us-central1", "us-east1", "us-east4", "europe-we
 // --- Main Application Loop ---
 
 func main() {
-	// Handle startup flags like --config before entering the interactive loop.
+	// Handle startup flags like --config and --resume before entering the interactive loop.
 	var configPath string
+	var resumeSession bool
 	flag.StringVar(&configPath, "config", "", "Path to a YAML configuration file.")
+	flag.BoolVar(&resumeSession, "resume", false, "Resume from a saved session.")
 	flag.Parse()
 
-	if configPath != "" {
+	if resumeSession {
+		err := handleResumeSession()
+		if err != nil {
+			fmt.Printf("❌ Error resuming session: %v\n", err)
+			os.Exit(1)
+		}
+	} else if configPath != "" {
 		err := loadConfigFromFile(configPath)
 		if err != nil {
 			fmt.Printf("❌ Error loading config file: %v\n", err)
@@ -301,6 +328,8 @@ func main() {
 			readline.PcItem("logout"),
 			readline.PcItem("show-token"),
 			readline.PcItem("--enum-providers"),
+			readline.PcItem("status"),
+			readline.PcItem("refresh"),
 		),
 		readline.PcItem("scan",
 			readline.PcItem("--all"),
@@ -332,6 +361,7 @@ func main() {
 			readline.PcItem("add"),
 		),
 		readline.PcItem("make-config"),
+		readline.PcItem("save-quit"),
 		readline.PcItem("help"),
 		readline.PcItem("exit"),
 		readline.PcItem("quit"),
@@ -379,6 +409,9 @@ func main() {
 			handleWordlist(args)
 		case "make-config":
 			handleMakeConfig()
+		case "save-quit":
+			handleSaveQuit()
+			return
 		case "help":
 			printHelp()
 		case "exit", "quit":
@@ -465,6 +498,14 @@ func handleAuth(args []string) {
 			handleEnumerateAuthProviders()
 			return
 		}
+		if strings.ToLower(args[0]) == "status" {
+			handleAuthStatus()
+			return
+		}
+		if strings.ToLower(args[0]) == "refresh" {
+			handleAuthRefresh()
+			return
+		}
 	}
 
 	authFlags := flag.NewFlagSet("auth", flag.ContinueOnError)
@@ -504,11 +545,11 @@ func handleAuth(args []string) {
 		authPassword = *password
 		fmt.Printf("[*] Attempting to login with %s...\n", authEmail)
 	} else {
-		fmt.Println("Usage: auth [--create-account [--email <email>]] | [-e <email> -P <password>] | [logout] | [show-token] | [--enum-providers]")
+		fmt.Println("Usage: auth [--create-account [--email <email>]] | [-e <email> -P <password>] | [logout] | [show-token] | [status] | [refresh] | [--enum-providers]")
 		return
 	}
 
-	token, err := getAuthToken(authEmail, authPassword, *createAccount)
+	token, userID, emailVerified, err := getAuthToken(authEmail, authPassword, *createAccount)
 	if err != nil {
 		fmt.Printf("❌ Authentication failed: %v\n", err)
 		return
@@ -518,7 +559,36 @@ func handleAuth(args []string) {
 	currentState.Token = token
 	currentState.Email = authEmail
 	currentState.Password = authPassword
+	currentState.UserID = userID
+	currentState.EmailVerified = emailVerified
 	stateMutex.Unlock()
+
+	// Send verification email for custom accounts if not already verified
+	if *createAccount && *createAccountEmail != "" && *createAccountEmail != "fire@scan.com" {
+		// Check current verification status by fetching fresh user info
+		currentVerified, err := checkEmailVerificationStatus(token)
+		if err != nil {
+			fmt.Printf("⚠️  Warning: Could not check verification status: %v\n", err)
+			currentVerified = emailVerified // Fall back to signup response
+		}
+		
+		if !currentVerified {
+			fmt.Printf("[*] Sending email verification to %s...\n", authEmail)
+			err = sendEmailVerification(token)
+			if err != nil {
+				fmt.Printf("⚠️  Warning: Failed to send verification email: %v\n", err)
+			} else {
+				fmt.Printf("%s✓ Verification email sent to %s%s\n", ColorYellow, authEmail, ColorReset)
+			}
+		} else {
+			fmt.Printf("%s✓ Email %s is already verified%s\n", ColorGreen, authEmail, ColorReset)
+		}
+		
+		// Update state with current verification status
+		stateMutex.Lock()
+		currentState.EmailVerified = currentVerified
+		stateMutex.Unlock()
+	}
 
 	fmt.Printf("%s✓ Successfully authenticated. Token has been set.%s\n", ColorGreen, ColorReset)
 }
@@ -829,6 +899,8 @@ func printHelp() {
 	fmt.Println("    -P <password>         Password for authentication.")
 	fmt.Println("    logout                Clear the current session token.")
 	fmt.Println("    show-token            Display the current JWT authentication token.")
+	fmt.Println("    status                Show current authentication status and user details.")
+	fmt.Println("    refresh               Manually refresh the authentication token.")
 	fmt.Println("    --enum-providers      List enabled authentication providers.")
 	fmt.Println("  scan                  Run a scan with the current configuration.")
 	fmt.Println("    --all                 Run all scan modules with the 'all' wordlist.")
@@ -846,8 +918,13 @@ func printHelp() {
 	fmt.Println("    show <name>           Show contents of a specific list.")
 	fmt.Println("    add <name> <w1,w2>    Add a new session-only list.")
 	fmt.Println("  make-config           Print an example configuration file.")
+	fmt.Println("  save-quit             Save current session and exit.")
 	fmt.Println("  help                  Display this help menu.")
 	fmt.Println("  exit / quit           Close the application.")
+	fmt.Println("--------------------------")
+	fmt.Println("\nStartup Options:")
+	fmt.Println("  firescan --config <file>    Load configuration from YAML file")
+	fmt.Println("  firescan --resume           Resume from a saved session")
 	fmt.Println("--------------------------")
 }
 
@@ -910,31 +987,31 @@ func loadConfigFromFile(path string) error {
 	return err
 }
 
-func getAuthToken(email, password string, createAccount bool) (string, error) {
+func getAuthToken(email, password string, createAccount bool) (string, string, bool, error) {
 	if createAccount {
-		token, err := signUp(email, password, currentState.APIKey)
+		token, userID, emailVerified, err := signUp(email, password, currentState.APIKey)
 		if err != nil {
 			if strings.Contains(err.Error(), "EMAIL_EXISTS") {
 				fmt.Println("[*] Test account already exists, attempting to log in...")
 				return signIn(email, password, currentState.APIKey)
 			}
-			return "", err
+			return "", "", false, err
 		}
-		return token, nil
+		return token, userID, emailVerified, nil
 	}
 	return signIn(email, password, currentState.APIKey)
 }
 
-func signUp(email, password, apiKey string) (string, error) {
+func signUp(email, password, apiKey string) (string, string, bool, error) {
 	url := fmt.Sprintf("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=%s", apiKey)
 	payload := map[string]string{"email": email, "password": password, "returnSecureToken": "true"}
-	return executeAuthRequest(url, payload)
+	return executeAuthRequestWithUserInfo(url, payload)
 }
 
-func signIn(email, password, apiKey string) (string, error) {
+func signIn(email, password, apiKey string) (string, string, bool, error) {
 	url := fmt.Sprintf("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=%s", apiKey)
 	payload := map[string]string{"email": email, "password": password, "returnSecureToken": "true"}
-	return executeAuthRequest(url, payload)
+	return executeAuthRequestWithUserInfo(url, payload)
 }
 
 func executeAuthRequest(url string, payload map[string]string) (string, error) {
@@ -956,6 +1033,33 @@ func executeAuthRequest(url string, payload map[string]string) (string, error) {
 		return idToken, nil
 	}
 	return "", fmt.Errorf("could not find idToken in auth response")
+}
+
+func executeAuthRequestWithUserInfo(url string, payload map[string]string) (string, string, bool, error) {
+	jsonPayload, _ := json.Marshal(payload)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return "", "", false, err
+	}
+	defer resp.Body.Close()
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != http.StatusOK {
+		if errData, ok := result["error"].(map[string]interface{}); ok {
+			return "", "", false, fmt.Errorf("auth API error: %s (HTTP %d)", errData["message"], resp.StatusCode)
+		}
+		return "", "", false, fmt.Errorf("unexpected auth API error (HTTP %d)", resp.StatusCode)
+	}
+	
+	idToken, hasToken := result["idToken"].(string)
+	if !hasToken {
+		return "", "", false, fmt.Errorf("could not find idToken in auth response")
+	}
+	
+	userID, _ := result["localId"].(string)
+	emailVerified, _ := result["emailVerified"].(bool)
+	
+	return idToken, userID, emailVerified, nil
 }
 
 // A centralized HTTP client for making authenticated requests.
@@ -986,13 +1090,15 @@ func makeAuthenticatedRequest(method, url string) (*http.Response, error) {
 		stateMutex.RUnlock()
 
 		if email != "" && password != "" {
-			newToken, err := signIn(email, password, currentState.APIKey)
+			newToken, userID, emailVerified, err := signIn(email, password, currentState.APIKey)
 			if err != nil {
 				return resp, fmt.Errorf("token refresh failed: %v", err)
 			}
 			fmt.Println("✓ Token refreshed successfully.")
 			stateMutex.Lock()
 			currentState.Token = newToken
+			currentState.UserID = userID
+			currentState.EmailVerified = emailVerified
 			stateMutex.Unlock()
 			req.Header.Set("Authorization", "Bearer "+newToken)
 			return client.Do(req)
@@ -1294,6 +1400,294 @@ func printJSON(findings []Finding) {
 		return
 	}
 	fmt.Println(string(output))
+}
+
+func checkEmailVerificationStatus(idToken string) (bool, error) {
+	stateMutex.RLock()
+	apiKey := currentState.APIKey
+	stateMutex.RUnlock()
+	
+	url := fmt.Sprintf("https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=%s", apiKey)
+	payload := map[string]string{
+		"idToken": idToken,
+	}
+	
+	jsonPayload, _ := json.Marshal(payload)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		if errData, ok := result["error"].(map[string]interface{}); ok {
+			return false, fmt.Errorf("user lookup API error: %s (HTTP %d)", errData["message"], resp.StatusCode)
+		}
+		return false, fmt.Errorf("unexpected user lookup API error (HTTP %d)", resp.StatusCode)
+	}
+	
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	
+	if users, ok := result["users"].([]interface{}); ok && len(users) > 0 {
+		if user, ok := users[0].(map[string]interface{}); ok {
+			if emailVerified, ok := user["emailVerified"].(bool); ok {
+				return emailVerified, nil
+			}
+		}
+	}
+	
+	return false, nil
+}
+
+func sendEmailVerification(idToken string) error {
+	stateMutex.RLock()
+	apiKey := currentState.APIKey
+	stateMutex.RUnlock()
+	
+	url := fmt.Sprintf("https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=%s", apiKey)
+	payload := map[string]string{
+		"requestType": "VERIFY_EMAIL",
+		"idToken":     idToken,
+	}
+	
+	jsonPayload, _ := json.Marshal(payload)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		if errData, ok := result["error"].(map[string]interface{}); ok {
+			return fmt.Errorf("verification email API error: %s (HTTP %d)", errData["message"], resp.StatusCode)
+		}
+		return fmt.Errorf("unexpected verification email API error (HTTP %d)", resp.StatusCode)
+	}
+	
+	return nil
+}
+
+func handleAuthStatus() {
+	stateMutex.RLock()
+	email := currentState.Email
+	userID := currentState.UserID
+	emailVerified := currentState.EmailVerified
+	token := currentState.Token
+	stateMutex.RUnlock()
+	
+	if token == "" {
+		fmt.Println("❌ No active authentication session. Please authenticate first using 'auth --create-account' or 'auth -e <email> -P <password>'.")
+		return
+	}
+	
+	fmt.Println("\n--- Authentication Status ---")
+	fmt.Printf("  Email         : %s\n", email)
+	fmt.Printf("  User ID       : %s\n", userID)
+	verificationStatus := "No"
+	if emailVerified {
+		verificationStatus = "Yes"
+	}
+	fmt.Printf("  Email Verified: %s\n", verificationStatus)
+	fmt.Printf("  Token Active  : Yes\n")
+	fmt.Println("-----------------------------")
+}
+
+func handleAuthRefresh() {
+	stateMutex.RLock()
+	email := currentState.Email
+	password := currentState.Password
+	apiKey := currentState.APIKey
+	stateMutex.RUnlock()
+	
+	if email == "" || password == "" {
+		fmt.Println("❌ Error: No stored credentials available for refresh. Please authenticate first.")
+		return
+	}
+	
+	if apiKey == "" {
+		fmt.Println("❌ Error: apiKey must be set before refreshing token.")
+		return
+	}
+	
+	fmt.Printf("[*] Refreshing authentication token for %s...\n", email)
+	
+	newToken, userID, emailVerified, err := signIn(email, password, apiKey)
+	if err != nil {
+		fmt.Printf("❌ Token refresh failed: %v\n", err)
+		return
+	}
+	
+	stateMutex.Lock()
+	currentState.Token = newToken
+	currentState.UserID = userID
+	currentState.EmailVerified = emailVerified
+	stateMutex.Unlock()
+	
+	fmt.Printf("%s✓ Token refreshed successfully.%s\n", ColorGreen, ColorReset)
+}
+
+func handleSaveQuit() {
+	stateMutex.RLock()
+	projectID := currentState.ProjectID
+	apiKey := currentState.APIKey
+	email := currentState.Email
+	password := currentState.Password
+	stateMutex.RUnlock()
+	
+	if projectID == "" || apiKey == "" {
+		fmt.Println("⚠️  Warning: No configuration to save (projectID and apiKey required).")
+		return
+	}
+	
+	fmt.Print("Enter a name for this session: ")
+	reader := bufio.NewReader(os.Stdin)
+	sessionName, _ := reader.ReadString('\n')
+	sessionName = strings.TrimSpace(sessionName)
+	
+	if sessionName == "" {
+		sessionName = fmt.Sprintf("%s-%d", projectID, time.Now().Unix())
+	}
+	
+	session := SavedSession{
+		Name:      sessionName,
+		ProjectID: projectID,
+		APIKey:    apiKey,
+		Email:     email,
+		Password:  password,
+		SavedAt:   time.Now(),
+	}
+	
+	err := saveSession(session)
+	if err != nil {
+		fmt.Printf("❌ Error saving session: %v\n", err)
+		return
+	}
+	
+	fmt.Printf("%s✓ Session '%s' saved successfully.%s\n", ColorGreen, sessionName, ColorReset)
+}
+
+func saveSession(session SavedSession) error {
+	// Load existing sessions
+	sessions, err := loadSavedSessions()
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to load existing sessions: %v", err)
+	}
+	
+	// Remove any existing session with the same name
+	var filteredSessions []SavedSession
+	for _, s := range sessions.Sessions {
+		if s.Name != session.Name {
+			filteredSessions = append(filteredSessions, s)
+		}
+	}
+	
+	// Add the new session
+	filteredSessions = append(filteredSessions, session)
+	
+	// Keep only the last 10 sessions
+	if len(filteredSessions) > 10 {
+		filteredSessions = filteredSessions[len(filteredSessions)-10:]
+	}
+	
+	sessions.Sessions = filteredSessions
+	
+	// Save to file
+	data, err := yaml.Marshal(sessions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal sessions: %v", err)
+	}
+	
+	err = os.WriteFile(sessionsFilePath, data, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write sessions file: %v", err)
+	}
+	
+	return nil
+}
+
+func loadSavedSessions() (*SessionsFile, error) {
+	data, err := os.ReadFile(sessionsFilePath)
+	if err != nil {
+		return &SessionsFile{Sessions: []SavedSession{}}, err
+	}
+	
+	var sessions SessionsFile
+	err = yaml.Unmarshal(data, &sessions)
+	if err != nil {
+		return &SessionsFile{Sessions: []SavedSession{}}, err
+	}
+	
+	return &sessions, nil
+}
+
+func handleResumeSession() error {
+	sessions, err := loadSavedSessions()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("no saved sessions found")
+		}
+		return fmt.Errorf("failed to load sessions: %v", err)
+	}
+	
+	if len(sessions.Sessions) == 0 {
+		return fmt.Errorf("no saved sessions available")
+	}
+	
+	fmt.Println("\n--- Available Sessions ---")
+	for i, session := range sessions.Sessions {
+		fmt.Printf("%d. %s (Project: %s, Email: %s, Saved: %s)\n", 
+			i+1, session.Name, session.ProjectID, 
+			maskString(session.Email, 2, 0), 
+			session.SavedAt.Format("2006-01-02 15:04"))
+	}
+	fmt.Println("--------------------------")
+	
+	fmt.Print("Select session number (1-" + fmt.Sprintf("%d", len(sessions.Sessions)) + "): ")
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+	
+	var selection int
+	_, err = fmt.Sscanf(input, "%d", &selection)
+	if err != nil || selection < 1 || selection > len(sessions.Sessions) {
+		return fmt.Errorf("invalid selection")
+	}
+	
+	selectedSession := sessions.Sessions[selection-1]
+	
+	// Load the session into current state
+	stateMutex.Lock()
+	currentState.ProjectID = selectedSession.ProjectID
+	currentState.APIKey = selectedSession.APIKey
+	currentState.Email = selectedSession.Email
+	currentState.Password = selectedSession.Password
+	stateMutex.Unlock()
+	
+	// Try to authenticate with stored credentials if available
+	if selectedSession.Email != "" && selectedSession.Password != "" {
+		fmt.Printf("[*] Attempting to authenticate with stored credentials for %s...\n", selectedSession.Email)
+		token, userID, emailVerified, err := signIn(selectedSession.Email, selectedSession.Password, selectedSession.APIKey)
+		if err != nil {
+			fmt.Printf("⚠️  Warning: Auto-authentication failed: %v\n", err)
+			fmt.Println("[*] Session loaded but you'll need to authenticate manually.")
+		} else {
+			stateMutex.Lock()
+			currentState.Token = token
+			currentState.UserID = userID
+			currentState.EmailVerified = emailVerified
+			stateMutex.Unlock()
+			fmt.Printf("%s✓ Session '%s' resumed and authenticated successfully.%s\n", ColorGreen, selectedSession.Name, ColorReset)
+			return nil
+		}
+	}
+	
+	fmt.Printf("✓ Session '%s' loaded. ProjectID and API Key have been set.\n", selectedSession.Name)
+	return nil
 }
 
 // maskString hides the middle of a string for secure display.
