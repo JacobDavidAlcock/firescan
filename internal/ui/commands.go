@@ -15,6 +15,7 @@ import (
 	"firescan/internal/scanner"
 	"firescan/internal/services"
 	"firescan/internal/types"
+	"firescan/internal/unauth"
 	"firescan/internal/wordlist"
 )
 
@@ -192,6 +193,7 @@ func HandleScan(args []string) {
 	servicesTest := scanFlags.Bool("services", false, "Enable Firebase services enumeration.")
 	appCheckTest := scanFlags.Bool("appcheck", false, "Enable App Check security testing.")
 	authAttackTest := scanFlags.Bool("authattack", false, "Enable advanced authentication attack testing (requires test mode).")
+	unauthTest := scanFlags.Bool("unauth", false, "Enable unauthenticated access testing (no login required).")
 	
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
@@ -236,6 +238,7 @@ func HandleScan(args []string) {
 		*hostingTest = true
 		*servicesTest = true
 		*appCheckTest = true
+		*unauthTest = true
 		if scanMode >= types.TestMode {
 			*rulesTest = true
 			*authAttackTest = true
@@ -244,7 +247,7 @@ func HandleScan(args []string) {
 
 	// Check if any scan type is specified
 	hasTraditionalScans := *rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest
-	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest
+	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *unauthTest
 	
 	if !hasTraditionalScans && !hasNewScans {
 		fmt.Println("❌ Error: No scan type specified. Use flags like --rtdb, --firestore, --rules, --services, --all, etc.")
@@ -252,9 +255,29 @@ func HandleScan(args []string) {
 	}
 
 	state := config.GetState()
-	if state.ProjectID == "" || state.Token == "" {
-		fmt.Println("❌ Error: projectID and token must be set before scanning. Use 'set' and 'auth'.")
-		return
+	
+	// For unauthenticated testing, only projectID is required
+	if *unauthTest {
+		if state.ProjectID == "" {
+			fmt.Println("❌ Error: projectID must be set for unauthenticated testing. Use 'set projectID <your-project-id>'.")
+			return
+		}
+		// API key is optional - will be used if available for enhanced testing
+		if state.APIKey != "" {
+			fmt.Printf("[*] Enhanced unauthenticated testing enabled with API key\n")
+		} else {
+			fmt.Printf("[*] Basic unauthenticated testing (set API key for enhanced testing)\n")
+		}
+	} else {
+		// For authenticated tests, both projectID and token are required
+		if hasTraditionalScans || *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest {
+			if state.ProjectID == "" || state.Token == "" {
+				fmt.Println("❌ Error: projectID and token must be set before authenticated scanning.")
+				fmt.Println("   To authenticate: use 'set' and 'auth' commands")
+				fmt.Println("   For unauthenticated testing: scan --unauth")
+				return
+			}
+		}
 	}
 
 	// Run traditional scans if specified
@@ -366,7 +389,7 @@ func HandleScan(args []string) {
 	// Advanced authentication attacks
 	if *authAttackTest {
 		if scanMode < types.TestMode {
-			fmt.Printf("⚠️  Advanced authentication testing requires test mode or higher. Use --test or --audit.\n")
+			fmt.Printf("[!] Advanced authentication testing requires test mode or higher. Use --test or --audit.\n")
 		} else {
 			fmt.Printf("\n%s[*] Running Advanced Authentication Attack Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
 			authResults, err := auth.TestAdvancedAuth(scanMode)
@@ -378,6 +401,19 @@ func HandleScan(args []string) {
 					auth.FormatAuthAttackResults(authResults)
 				}
 			}
+		}
+	}
+	
+	// Unauthenticated access testing
+	if *unauthTest {
+		fmt.Printf("\n%s[*] Running Unauthenticated Access Testing%s\n", types.ColorCyan, types.ColorReset)
+		unauthResults, err := unauth.TestUnauthenticated(scanMode)
+		if err != nil {
+			fmt.Printf("❌ Error during unauthenticated testing: %v\n", err)
+		} else {
+			// Count all security findings (accessible or data exposure)
+			unauthFindingsCount := unauth.CountUnauthFindings(unauthResults)
+			totalFindings += unauthFindingsCount
 		}
 	}
 	

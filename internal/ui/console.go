@@ -78,6 +78,17 @@ func PrintHelp() {
 	fmt.Println("    --storage             Scan Cloud Storage.")
 	fmt.Println("    --functions           Scan Cloud Functions.")
 	fmt.Println("    --hosting             Scan Hosting for public config.")
+	fmt.Println("    --rules               Test security rules (requires test mode).")
+	fmt.Println("    --write               Test write access (requires test mode).")
+	fmt.Println("    --services            Enumerate Firebase services.")
+	fmt.Println("    --appcheck            Test App Check security.")
+	fmt.Println("    --authattack          Advanced auth attacks (requires test mode).")
+	fmt.Println("    --unauth              Unauthenticated access testing (see below).")
+	fmt.Println("    --probe               Safe mode - read-only operations (default).")
+	fmt.Println("    --test                Test mode - write testing with cleanup.")
+	fmt.Println("    --audit               Audit mode - deep testing with confirmation.")
+	fmt.Println("    --json                Output results in JSON format.")
+	fmt.Println("    -c <num>              Set concurrency level.")
 	fmt.Println("  extract               Dump data from a readable path.")
 	fmt.Println("    --firestore --path <collection>")
 	fmt.Println("    --rtdb --path <node>")
@@ -89,6 +100,30 @@ func PrintHelp() {
 	fmt.Println("  save-quit             Save current session and exit.")
 	fmt.Println("  help                  Display this help menu.")
 	fmt.Println("  exit / quit           Close the application.")
+	fmt.Println("--------------------------")
+	fmt.Println("\nUnauthenticated Testing (--unauth):")
+	fmt.Println("  Automatically adapts to available credentials:")
+	fmt.Println("  ")
+	fmt.Println("  ProjectID Only:")
+	fmt.Println("    set projectID my-app")
+	fmt.Println("    scan --unauth")
+	fmt.Println("    Tests: Basic endpoint enumeration, public access detection")
+	fmt.Println("  ")
+	fmt.Println("  ProjectID + API Key (Enhanced):")
+	fmt.Println("    set projectID my-app")
+	fmt.Println("    set apiKey AIza...")
+	fmt.Println("    scan --unauth")
+	fmt.Println("    Tests: All above + Auth API endpoints, REST API testing,")
+	fmt.Println("           Remote Config access, enhanced Firestore testing")
+	fmt.Println("  ")
+	fmt.Println("  What --unauth tests:")
+	fmt.Println("    • RTDB: Public collections, security rules exposure")
+	fmt.Println("    • Firestore: Document access, query endpoints")
+	fmt.Println("    • Storage: Bucket enumeration, public file access")
+	fmt.Println("    • Functions: Public function discovery")
+	fmt.Println("    • Hosting: Config files, well-known endpoints")
+	fmt.Println("    • Auth API: Signup, login endpoints (with API key)")
+	fmt.Println("    • Remote Config: Settings access (with API key)")
 	fmt.Println("--------------------------")
 	fmt.Println("\nStartup Options:")
 	fmt.Println("  firescan --config <file>    Load configuration from YAML file")
@@ -136,6 +171,15 @@ func RunConsole() error {
 			readline.PcItem("--storage"),
 			readline.PcItem("--functions"),
 			readline.PcItem("--hosting"),
+			readline.PcItem("--rules"),
+			readline.PcItem("--write"),
+			readline.PcItem("--services"),
+			readline.PcItem("--appcheck"),
+			readline.PcItem("--authattack"),
+			readline.PcItem("--unauth"),
+			readline.PcItem("--probe"),
+			readline.PcItem("--test"),
+			readline.PcItem("--audit"),
 			readline.PcItem("--json"),
 			readline.PcItem("-c"),
 		),
