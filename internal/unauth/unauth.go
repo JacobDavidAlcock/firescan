@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"firescan/internal/config"
+	"firescan/internal/status"
 	"firescan/internal/types"
 )
 
@@ -89,11 +90,17 @@ func TestUnauthenticated(mode types.ScanMode) ([]UnauthTestResult, error) {
 	storageSecResults := testStorageSecurityUnauth(state, hasAPIKey)
 	results = append(results, storageSecResults...)
 
+	// Clear any remaining status at the end
+	status.ClearStatus()
+
 	return results, nil
 }
 
 // showUnauthFinding displays a finding immediately in the same format as normal scans
 func showUnauthFinding(result UnauthTestResult) {
+	// Clear any status message before showing finding
+	status.ClearStatus()
+	
 	// Determine severity and type
 	severity := "Medium"
 	findingType := "Public Access"
@@ -439,6 +446,9 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 		Description: description,
 	}
 
+	// Show what we're currently testing
+	status.ShowStatus(fmt.Sprintf("Testing %s: %s", service, description))
+
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -446,6 +456,7 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		result.Error = err
+		status.ClearStatus() // Clear status on error
 		return result
 	}
 
@@ -456,11 +467,20 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 	resp, err := client.Do(req)
 	if err != nil {
 		result.Error = err
+		status.ClearStatus() // Clear status on error
 		return result
 	}
 	defer resp.Body.Close()
 
 	result.StatusCode = resp.StatusCode
+	
+	// Filter out 404 and other 4xx client errors to reduce false positives
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		result.Accessible = false
+		status.ClearStatus() // Clear status - not a finding
+		return result
+	}
+	
 	result.Accessible = resp.StatusCode == 200
 
 	// Check if we got data
@@ -491,6 +511,11 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 		}
 	}
 
+	// Clear status if no security finding (no data or not accessible)
+	if !result.HasData && !result.Accessible {
+		status.ClearStatus()
+	}
+	
 	return result
 }
 

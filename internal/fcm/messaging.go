@@ -10,6 +10,7 @@ import (
 	"firescan/internal/auth"
 	"firescan/internal/config"
 	"firescan/internal/safety"
+	"firescan/internal/status"
 	"firescan/internal/types"
 )
 
@@ -92,6 +93,9 @@ func TestFCMSecurity(mode types.ScanMode) ([]FCMSecurityResult, error) {
 	}
 	results = append(results, dynamicResults...)
 
+	// Clear any remaining status at the end
+	status.ClearStatus()
+
 	return results, nil
 }
 
@@ -114,6 +118,8 @@ func testFCMServerKeyExposure(state types.State, mode types.ScanMode) []FCMSecur
 	}
 
 	for _, testCase := range testCases {
+		status.ShowStatus(fmt.Sprintf("Testing FCM key exposure: %s", testCase.description))
+		
 		result := FCMSecurityResult{
 			TestType:     "FCM Key Exposure",
 			TestCase:     testCase.description,
@@ -717,6 +723,9 @@ func showFCMFinding(result FCMSecurityResult) {
 		return
 	}
 
+	// Clear any status message before showing finding
+	status.ClearStatus()
+	
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	
 	// Determine color based on severity

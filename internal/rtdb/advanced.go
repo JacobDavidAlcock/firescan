@@ -10,6 +10,7 @@ import (
 	"firescan/internal/auth"
 	"firescan/internal/config"
 	"firescan/internal/safety"
+	"firescan/internal/status"
 	"firescan/internal/types"
 )
 
@@ -83,6 +84,9 @@ func TestRTDBAdvancedSecurity(mode types.ScanMode) ([]RTDBAdvancedResult, error)
 	}
 	results = append(results, deltaResults...)
 
+	// Clear any remaining status at the end
+	status.ClearStatus()
+
 	return results, nil
 }
 
@@ -105,6 +109,8 @@ func testRulePrecedenceConflicts(state types.State, mode types.ScanMode) []RTDBA
 	}
 
 	for _, testCase := range testCases {
+		status.ShowStatus(fmt.Sprintf("Testing RTDB rule precedence: %s", testCase.description))
+		
 		result := RTDBAdvancedResult{
 			TestType:     "Rule Precedence",
 			TestCase:     testCase.description,
@@ -558,6 +564,9 @@ func showRTDBFinding(result RTDBAdvancedResult) {
 		return
 	}
 
+	// Clear any status message before showing finding
+	status.ClearStatus()
+	
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	
 	// Determine color based on severity
