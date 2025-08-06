@@ -11,9 +11,11 @@ import (
 	"firescan/internal/appcheck"
 	"firescan/internal/auth"
 	"firescan/internal/config"
+	"firescan/internal/management"
 	"firescan/internal/rules"
 	"firescan/internal/scanner"
 	"firescan/internal/services"
+	"firescan/internal/storage"
 	"firescan/internal/types"
 	"firescan/internal/unauth"
 	"firescan/internal/wordlist"
@@ -194,6 +196,8 @@ func HandleScan(args []string) {
 	appCheckTest := scanFlags.Bool("appcheck", false, "Enable App Check security testing.")
 	authAttackTest := scanFlags.Bool("authattack", false, "Enable advanced authentication attack testing (requires test mode).")
 	unauthTest := scanFlags.Bool("unauth", false, "Enable unauthenticated access testing (no login required).")
+	storageSecTest := scanFlags.Bool("storage-sec", false, "Enable Firebase Storage deep security testing.")
+	managementTest := scanFlags.Bool("mgmt-api", false, "Enable Firebase Management API security testing.")
 	
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
@@ -239,6 +243,8 @@ func HandleScan(args []string) {
 		*servicesTest = true
 		*appCheckTest = true
 		*unauthTest = true
+		*storageSecTest = true
+		*managementTest = true
 		if scanMode >= types.TestMode {
 			*rulesTest = true
 			*authAttackTest = true
@@ -247,7 +253,7 @@ func HandleScan(args []string) {
 
 	// Check if any scan type is specified
 	hasTraditionalScans := *rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest
-	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *unauthTest
+	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *unauthTest || *storageSecTest || *managementTest
 	
 	if !hasTraditionalScans && !hasNewScans {
 		fmt.Println("❌ Error: No scan type specified. Use flags like --rtdb, --firestore, --rules, --services, --all, etc.")
@@ -270,7 +276,7 @@ func HandleScan(args []string) {
 		}
 	} else {
 		// For authenticated tests, both projectID and token are required
-		if hasTraditionalScans || *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest {
+		if hasTraditionalScans || *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *storageSecTest || *managementTest {
 			if state.ProjectID == "" || state.Token == "" {
 				fmt.Println("❌ Error: projectID and token must be set before authenticated scanning.")
 				fmt.Println("   To authenticate: use 'set' and 'auth' commands")
@@ -414,6 +420,38 @@ func HandleScan(args []string) {
 			// Count all security findings (accessible or data exposure)
 			unauthFindingsCount := unauth.CountUnauthFindings(unauthResults)
 			totalFindings += unauthFindingsCount
+		}
+	}
+	
+	// Storage Security Deep Testing
+	if *storageSecTest {
+		fmt.Printf("\n%s[*] Running Firebase Storage Deep Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		storageResults, err := storage.TestStorageSecurity(scanMode)
+		if err != nil {
+			fmt.Printf("❌ Error during storage security testing: %v\n", err)
+		} else {
+			// Count findings
+			for _, result := range storageResults {
+				if result.Finding != "" && result.Severity != "" {
+					totalFindings++
+				}
+			}
+		}
+	}
+	
+	// Firebase Management API Security Testing
+	if *managementTest {
+		fmt.Printf("\n%s[*] Running Firebase Management API Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		mgmtResults, err := management.TestManagementAPISecurity(scanMode)
+		if err != nil {
+			fmt.Printf("❌ Error during Management API testing: %v\n", err)
+		} else {
+			// Count findings
+			for _, result := range mgmtResults {
+				if result.Finding != "" && result.Severity != "" {
+					totalFindings++
+				}
+			}
 		}
 	}
 	

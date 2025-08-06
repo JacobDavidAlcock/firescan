@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // GetAuthToken authenticates and returns token, userID, emailVerified status, and error
@@ -269,4 +271,65 @@ func probeAuthProvider(provider, apiKey string) bool {
 	}
 	// If there's no error field at all, the request was successful, meaning it's enabled.
 	return true
+}
+
+// MakeAuthenticatedRequestWithBody makes an authenticated HTTP request with a request body
+func MakeAuthenticatedRequestWithBody(method, url, body, token, email, password, apiKey string, updateTokenFunc func(string, string, bool)) (*http.Response, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Create request with body
+	var bodyReader io.Reader
+	if body != "" {
+		bodyReader = strings.NewReader(body)
+	}
+
+	req, err := http.NewRequest(method, url, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Add authentication header
+	req.Header.Set("Authorization", "Bearer "+token)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+
+	// Check if token is expired and attempt refresh if needed
+	if resp.StatusCode == 401 && updateTokenFunc != nil {
+		resp.Body.Close()
+		
+		// Attempt token refresh
+		if email != "" && password != "" {
+			newToken, userID, emailVerified, err := SignIn(email, password, apiKey)
+			if err == nil {
+				updateTokenFunc(newToken, userID, emailVerified)
+				
+				// Retry with new token
+				if body != "" {
+					bodyReader = strings.NewReader(body)
+				}
+				newReq, err := http.NewRequest(method, url, bodyReader)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create retry request: %v", err)
+				}
+				
+				newReq.Header.Set("Authorization", "Bearer "+newToken)
+				if body != "" {
+					newReq.Header.Set("Content-Type", "application/json")
+				}
+				
+				resp, err = client.Do(newReq)
+				if err != nil {
+					return nil, fmt.Errorf("retry request failed: %v", err)
+				}
+			}
+		}
+	}
+
+	return resp, nil
 }

@@ -84,6 +84,8 @@ func PrintHelp() {
 	fmt.Println("    --appcheck            Test App Check security.")
 	fmt.Println("    --authattack          Advanced auth attacks (requires test mode).")
 	fmt.Println("    --unauth              Unauthenticated access testing (see below).")
+	fmt.Println("    --storage-sec         Firebase Storage deep security testing.")
+	fmt.Println("    --mgmt-api            Firebase Management API security testing.")
 	fmt.Println("    --probe               Safe mode - read-only operations (default).")
 	fmt.Println("    --test                Test mode - write testing with cleanup.")
 	fmt.Println("    --audit               Audit mode - deep testing with confirmation.")
@@ -177,6 +179,8 @@ func RunConsole() error {
 			readline.PcItem("--appcheck"),
 			readline.PcItem("--authattack"),
 			readline.PcItem("--unauth"),
+			readline.PcItem("--storage-sec"),
+			readline.PcItem("--mgmt-api"),
 			readline.PcItem("--probe"),
 			readline.PcItem("--test"),
 			readline.PcItem("--audit"),
