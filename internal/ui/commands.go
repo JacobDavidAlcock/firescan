@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"firescan/internal/appcheck"
 	"firescan/internal/auth"
 	"firescan/internal/config"
 	"firescan/internal/rules"
@@ -189,6 +190,8 @@ func HandleScan(args []string) {
 	rulesTest := scanFlags.Bool("rules", false, "Enable security rules testing.")
 	writeTest := scanFlags.Bool("write", false, "Enable write access testing (requires test mode).")
 	servicesTest := scanFlags.Bool("services", false, "Enable Firebase services enumeration.")
+	appCheckTest := scanFlags.Bool("appcheck", false, "Enable App Check security testing.")
+	authAttackTest := scanFlags.Bool("authattack", false, "Enable advanced authentication attack testing (requires test mode).")
 	
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
@@ -232,14 +235,16 @@ func HandleScan(args []string) {
 		*functionsTest = true
 		*hostingTest = true
 		*servicesTest = true
+		*appCheckTest = true
 		if scanMode >= types.TestMode {
 			*rulesTest = true
+			*authAttackTest = true
 		}
 	}
 
 	// Check if any scan type is specified
 	hasTraditionalScans := *rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest
-	hasNewScans := *rulesTest || *writeTest || *servicesTest
+	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest
 	
 	if !hasTraditionalScans && !hasNewScans {
 		fmt.Println("❌ Error: No scan type specified. Use flags like --rtdb, --firestore, --rules, --services, --all, etc.")
@@ -342,6 +347,38 @@ func HandleScan(args []string) {
 
 	if *jsonOutput {
 		PrintJSON(traditionalFindings)
+	}
+	
+	// App Check testing
+	if *appCheckTest {
+		fmt.Printf("\n%s[*] Running Firebase App Check Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		appCheckResults, err := appcheck.TestAppCheck(scanMode)
+		if err != nil {
+			fmt.Printf("❌ Error during App Check testing: %v\n", err)
+		} else {
+			totalFindings += len(appCheckResults)
+			if !*jsonOutput {
+				appcheck.FormatAppCheckResults(appCheckResults)
+			}
+		}
+	}
+	
+	// Advanced authentication attacks
+	if *authAttackTest {
+		if scanMode < types.TestMode {
+			fmt.Printf("⚠️  Advanced authentication testing requires test mode or higher. Use --test or --audit.\n")
+		} else {
+			fmt.Printf("\n%s[*] Running Advanced Authentication Attack Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+			authResults, err := auth.TestAdvancedAuth(scanMode)
+			if err != nil {
+				fmt.Printf("❌ Error during advanced auth testing: %v\n", err)
+			} else {
+				totalFindings += len(authResults)
+				if !*jsonOutput {
+					auth.FormatAuthAttackResults(authResults)
+				}
+			}
+		}
 	}
 	
 	fmt.Printf("\n\n✅ Scan complete. Found %d total findings.\n", totalFindings)
