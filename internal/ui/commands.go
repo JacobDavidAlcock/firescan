@@ -11,7 +11,9 @@ import (
 	"firescan/internal/appcheck"
 	"firescan/internal/auth"
 	"firescan/internal/config"
+	"firescan/internal/fcm"
 	"firescan/internal/management"
+	"firescan/internal/rtdb"
 	"firescan/internal/rules"
 	"firescan/internal/scanner"
 	"firescan/internal/services"
@@ -198,6 +200,8 @@ func HandleScan(args []string) {
 	unauthTest := scanFlags.Bool("unauth", false, "Enable unauthenticated access testing (no login required).")
 	storageSecTest := scanFlags.Bool("storage-sec", false, "Enable Firebase Storage deep security testing.")
 	managementTest := scanFlags.Bool("mgmt-api", false, "Enable Firebase Management API security testing.")
+	rtdbAdvancedTest := scanFlags.Bool("rtdb-advanced", false, "Enable RTDB advanced rule context testing.")
+	fcmTest := scanFlags.Bool("fcm", false, "Enable FCM & Push Notification security testing.")
 	
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
@@ -245,6 +249,8 @@ func HandleScan(args []string) {
 		*unauthTest = true
 		*storageSecTest = true
 		*managementTest = true
+		*rtdbAdvancedTest = true
+		*fcmTest = true
 		if scanMode >= types.TestMode {
 			*rulesTest = true
 			*authAttackTest = true
@@ -253,7 +259,7 @@ func HandleScan(args []string) {
 
 	// Check if any scan type is specified
 	hasTraditionalScans := *rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest
-	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *unauthTest || *storageSecTest || *managementTest
+	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *unauthTest || *storageSecTest || *managementTest || *rtdbAdvancedTest || *fcmTest
 	
 	if !hasTraditionalScans && !hasNewScans {
 		fmt.Println("❌ Error: No scan type specified. Use flags like --rtdb, --firestore, --rules, --services, --all, etc.")
@@ -276,7 +282,7 @@ func HandleScan(args []string) {
 		}
 	} else {
 		// For authenticated tests, both projectID and token are required
-		if hasTraditionalScans || *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *storageSecTest || *managementTest {
+		if hasTraditionalScans || *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *storageSecTest || *managementTest || *rtdbAdvancedTest || *fcmTest {
 			if state.ProjectID == "" || state.Token == "" {
 				fmt.Println("❌ Error: projectID and token must be set before authenticated scanning.")
 				fmt.Println("   To authenticate: use 'set' and 'auth' commands")
@@ -448,6 +454,38 @@ func HandleScan(args []string) {
 		} else {
 			// Count findings
 			for _, result := range mgmtResults {
+				if result.Finding != "" && result.Severity != "" {
+					totalFindings++
+				}
+			}
+		}
+	}
+	
+	// RTDB Advanced Rule Context Testing
+	if *rtdbAdvancedTest {
+		fmt.Printf("\n%s[*] Running RTDB Advanced Rule Context Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		rtdbResults, err := rtdb.TestRTDBAdvancedSecurity(scanMode)
+		if err != nil {
+			fmt.Printf("❌ Error during RTDB advanced testing: %v\n", err)
+		} else {
+			// Count findings
+			for _, result := range rtdbResults {
+				if result.Finding != "" && result.Severity != "" {
+					totalFindings++
+				}
+			}
+		}
+	}
+	
+	// FCM & Push Notification Security Testing
+	if *fcmTest {
+		fmt.Printf("\n%s[*] Running FCM & Push Notification Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		fcmResults, err := fcm.TestFCMSecurity(scanMode)
+		if err != nil {
+			fmt.Printf("❌ Error during FCM testing: %v\n", err)
+		} else {
+			// Count findings
+			for _, result := range fcmResults {
 				if result.Finding != "" && result.Severity != "" {
 					totalFindings++
 				}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"firescan/internal/config"
@@ -67,6 +68,26 @@ func TestUnauthenticated(mode types.ScanMode) ([]UnauthTestResult, error) {
 		authResults := testAuthAPIUnauth(state)
 		results = append(results, authResults...)
 	}
+
+	// Test RTDB Advanced vulnerabilities (works with projectID only)
+	rtdbAdvResults := testRTDBAdvancedUnauth(state, hasAPIKey)
+	results = append(results, rtdbAdvResults...)
+
+	// Test FCM security (works with projectID, enhanced with API key)
+	fcmResults := testFCMUnauth(state, hasAPIKey)
+	results = append(results, fcmResults...)
+
+	// Test Firebase Services enumeration (works with projectID only)
+	servicesResults := testServicesUnauth(state, hasAPIKey)
+	results = append(results, servicesResults...)
+
+	// Test App Check configuration (works with projectID only)
+	appCheckResults := testAppCheckUnauth(state, hasAPIKey)
+	results = append(results, appCheckResults...)
+
+	// Test Storage security basics (works with projectID only)
+	storageSecResults := testStorageSecurityUnauth(state, hasAPIKey)
+	results = append(results, storageSecResults...)
 
 	return results, nil
 }
@@ -482,4 +503,237 @@ func CountUnauthFindings(results []UnauthTestResult) int {
 		}
 	}
 	return count
+}
+
+// testRTDBAdvancedUnauth tests RTDB advanced vulnerabilities without authentication
+func testRTDBAdvancedUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
+	var results []UnauthTestResult
+
+	// Test path traversal vulnerabilities  
+	exploitPaths := []string{
+		"/../admin",
+		"/users/../config", 
+		"/public/%2e%2e/private",
+		"/data/..",
+		"/.settings/rules",
+		"/.indexOn",
+	}
+
+	for _, path := range exploitPaths {
+		result := makeUnauthenticatedRequest("RTDB Advanced", fmt.Sprintf("https://%s-default-rtdb.firebaseio.com%s.json", state.ProjectID, path), "GET", fmt.Sprintf("Path traversal test: %s", path))
+		
+		// Only show if it's actually accessible (security finding)
+		if result.Accessible {
+			showUnauthFinding(result)
+		}
+		
+		results = append(results, result)
+	}
+
+	// Test rule structure exposure
+	rulesResult := makeUnauthenticatedRequest("RTDB Advanced", fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/.settings/rules.json", state.ProjectID), "GET", "Security rules exposure")
+	if rulesResult.HasData {
+		showUnauthFinding(rulesResult)
+	}
+	results = append(results, rulesResult)
+
+	return results
+}
+
+// testFCMUnauth tests FCM and push notification security without authentication
+func testFCMUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
+	var results []UnauthTestResult
+
+	// Test FCM configuration exposure in web resources
+	configEndpoints := []struct {
+		url         string
+		description string
+	}{
+		{fmt.Sprintf("https://%s.web.app/firebase-messaging-sw.js", state.ProjectID), "FCM service worker keys"},
+		{fmt.Sprintf("https://%s.web.app/manifest.json", state.ProjectID), "Web app manifest with FCM config"},
+		{fmt.Sprintf("https://%s.web.app/.well-known/firebase-messaging-sw.js", state.ProjectID), "Well-known FCM service worker"},
+		{fmt.Sprintf("https://%s.firebaseapp.com/firebase-messaging-sw.js", state.ProjectID), "Firebase app FCM service worker"},
+		{fmt.Sprintf("https://%s.firebaseapp.com/manifest.json", state.ProjectID), "Firebase app manifest"},
+	}
+
+	for _, endpoint := range configEndpoints {
+		result := makeUnauthenticatedRequest("FCM Security", endpoint.url, "GET", endpoint.description)
+		
+		// Check for FCM keys/sensitive data in the response
+		if result.Accessible && result.DataSample != nil {
+			dataStr := fmt.Sprintf("%v", result.DataSample)
+			if containsFCMKeys(dataStr) {
+				result.HasData = true
+				result.Description += " - Contains FCM keys/configuration"
+				showUnauthFinding(result)
+			}
+		}
+		
+		results = append(results, result)
+	}
+
+	// Test FCM topic information (enhanced with API key)
+	if hasAPIKey {
+		commonTopics := []string{"news", "updates", "notifications", "all", "general", "test"}
+		for _, topic := range commonTopics {
+			topicURL := fmt.Sprintf("https://iid.googleapis.com/iid/info/%s?key=%s", topic, state.APIKey)
+			result := makeUnauthenticatedRequest("FCM Security", topicURL, "GET", fmt.Sprintf("Topic information: %s", topic))
+			
+			if result.Accessible && result.HasData {
+				showUnauthFinding(result)
+			}
+			
+			results = append(results, result)
+		}
+	}
+
+	// Test Dynamic Links configuration
+	dynamicLinksEndpoints := []struct {
+		url         string
+		description string
+	}{
+		{fmt.Sprintf("https://%s.page.link/.well-known/firebase-dynamic-links", state.ProjectID), "Dynamic Links configuration"},
+		{fmt.Sprintf("https://%s.web.app/.well-known/firebase-dynamic-links", state.ProjectID), "Web app dynamic links config"},
+	}
+
+	for _, endpoint := range dynamicLinksEndpoints {
+		result := makeUnauthenticatedRequest("FCM Security", endpoint.url, "GET", endpoint.description)
+		
+		if result.Accessible {
+			showUnauthFinding(result)
+		}
+		
+		results = append(results, result)
+	}
+
+	return results
+}
+
+// containsFCMKeys checks if response contains FCM-related sensitive data
+func containsFCMKeys(data string) bool {
+	sensitivePatterns := []string{
+		"messagingSenderId",
+		"senderId", 
+		"AAAA", // FCM server key pattern
+		"APA91b", // FCM token pattern
+		"firebase-messaging",
+		"vapidKey",
+		"serverKey",
+	}
+	
+	for _, pattern := range sensitivePatterns {
+		if strings.Contains(data, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// testServicesUnauth tests Firebase services enumeration without authentication
+func testServicesUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
+	var results []UnauthTestResult
+
+	// Test common Firebase service endpoints
+	serviceEndpoints := []struct {
+		url         string
+		description string
+	}{
+		{fmt.Sprintf("https://%s.web.app/.well-known/remoteconfig", state.ProjectID), "Remote Config public endpoint"},
+		{fmt.Sprintf("https://%s.web.app/.well-known/firebase-extensions", state.ProjectID), "Extensions configuration"},
+		{fmt.Sprintf("https://%s.firebaseapp.com/.well-known/remoteconfig", state.ProjectID), "Firebase app Remote Config"},
+		{fmt.Sprintf("https://%s.page.link/.well-known/assetlinks.json", state.ProjectID), "Dynamic Links asset links"},
+		{fmt.Sprintf("https://%s.web.app/firebase-config.json", state.ProjectID), "Firebase configuration file"},
+	}
+
+	for _, endpoint := range serviceEndpoints {
+		result := makeUnauthenticatedRequest("Services", endpoint.url, "GET", endpoint.description)
+		
+		if result.Accessible && result.HasData {
+			showUnauthFinding(result)
+		}
+		
+		results = append(results, result)
+	}
+
+	return results
+}
+
+// testAppCheckUnauth tests App Check configuration without authentication
+func testAppCheckUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
+	var results []UnauthTestResult
+
+	// Test App Check configuration endpoints
+	appCheckEndpoints := []struct {
+		url         string
+		description string
+	}{
+		{fmt.Sprintf("https://%s.web.app/.well-known/app-check", state.ProjectID), "App Check configuration"},
+		{fmt.Sprintf("https://%s.firebaseapp.com/.well-known/app-check", state.ProjectID), "Firebase app App Check config"},
+		{fmt.Sprintf("https://%s.web.app/recaptcha-config.json", state.ProjectID), "reCAPTCHA configuration"},
+		{fmt.Sprintf("https://%s.web.app/app-attest-config.json", state.ProjectID), "App Attest configuration"},
+	}
+
+	for _, endpoint := range appCheckEndpoints {
+		result := makeUnauthenticatedRequest("App Check", endpoint.url, "GET", endpoint.description)
+		
+		if result.Accessible {
+			// Check if response contains sensitive App Check data
+			if result.DataSample != nil {
+				dataStr := fmt.Sprintf("%v", result.DataSample)
+				if strings.Contains(dataStr, "debug") || strings.Contains(dataStr, "token") || strings.Contains(dataStr, "key") {
+					result.HasData = true
+					result.Description += " - Contains App Check configuration"
+				}
+			}
+			
+			if result.HasData {
+				showUnauthFinding(result)
+			}
+		}
+		
+		results = append(results, result)
+	}
+
+	return results
+}
+
+// testStorageSecurityUnauth tests Firebase Storage security basics without authentication
+func testStorageSecurityUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
+	var results []UnauthTestResult
+
+	// Test Storage security configuration endpoints
+	storageEndpoints := []struct {
+		url         string
+		description string
+	}{
+		{fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s.appspot.com", state.ProjectID), "Storage bucket metadata"},
+		{fmt.Sprintf("https://%s.web.app/.well-known/storage-cors", state.ProjectID), "Storage CORS configuration"},
+		{fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s.appspot.com/o?alt=media", state.ProjectID), "Public storage objects"},
+		{fmt.Sprintf("https://%s.appspot.com/.well-known/security.txt", state.ProjectID), "Security configuration"},
+	}
+
+	for _, endpoint := range storageEndpoints {
+		result := makeUnauthenticatedRequest("Storage Security", endpoint.url, "GET", endpoint.description)
+		
+		if result.Accessible && result.HasData {
+			showUnauthFinding(result)
+		}
+		
+		results = append(results, result)
+	}
+
+	// Test common public file patterns
+	commonFiles := []string{"config.json", "firebase-config.js", "manifest.json", "robots.txt", ".env", "debug.log"}
+	for _, file := range commonFiles {
+		fileURL := fmt.Sprintf("https://storage.googleapis.com/%s.appspot.com/%s", state.ProjectID, file)
+		result := makeUnauthenticatedRequest("Storage Security", fileURL, "GET", fmt.Sprintf("Public file: %s", file))
+		
+		if result.Accessible && result.HasData {
+			showUnauthFinding(result)
+		}
+		
+		results = append(results, result)
+	}
+
+	return results
 }
