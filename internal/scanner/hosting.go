@@ -2,11 +2,11 @@ package scanner
 
 import (
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
 	"firescan/internal/config"
+	"firescan/internal/httpclient"
 	"firescan/internal/types"
 )
 
@@ -16,7 +16,10 @@ func CheckHostingConfig(results chan<- types.Finding, errors chan<- types.ScanEr
 	state := config.GetState()
 	url := fmt.Sprintf("https://%s.web.app/firebase.json", state.ProjectID)
 
-	resp, err := http.Get(url)
+	resp, err := httpclient.Get(url)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		errors <- types.ScanError{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -26,7 +29,6 @@ func CheckHostingConfig(results chan<- types.Finding, errors chan<- types.ScanEr
 		}
 		return
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode == 200 {
 		results <- types.Finding{
 			Timestamp: time.Now().Format(time.RFC3339),

@@ -19,6 +19,9 @@ func CheckCloudStorage(results chan<- types.Finding, errors chan<- types.ScanErr
 	url := fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s/o", bucketName)
 
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		errors <- types.ScanError{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -28,7 +31,6 @@ func CheckCloudStorage(results chan<- types.Finding, errors chan<- types.ScanErr
 		}
 		return
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		// Only report non-404 errors

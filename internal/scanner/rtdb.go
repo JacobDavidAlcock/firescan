@@ -3,6 +3,7 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"firescan/internal/config"
@@ -16,6 +17,9 @@ func CheckRTDB(job types.Job, results chan<- types.Finding, errors chan<- types.
 	url := fmt.Sprintf("https://%s.firebaseio.com/%s.json?auth=%s", state.ProjectID, job.Path, state.Token)
 
 	resp, err := httpclient.Get(url)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		errors <- types.ScanError{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -25,7 +29,6 @@ func CheckRTDB(job types.Job, results chan<- types.Finding, errors chan<- types.
 		}
 		return
 	}
-	defer resp.Body.Close()
 	var body interface{}
 	json.NewDecoder(resp.Body).Decode(&body)
 	if body != nil {
@@ -50,10 +53,12 @@ func ExtractRTDBNode(path string) (interface{}, error) {
 	url := fmt.Sprintf("https://%s.firebaseio.com/%s.json?auth=%s", state.ProjectID, path, state.Token)
 
 	resp, err := httpclient.Get(url)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch data (HTTP %d)", resp.StatusCode)
 	}

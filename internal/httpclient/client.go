@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"io"
 	"net/http"
 	"time"
 )
@@ -29,8 +30,8 @@ func Get(url string) (*http.Response, error) {
 }
 
 // Post performs an HTTP POST request with timeout
-func Post(url, contentType string, body interface{}) (*http.Response, error) {
-	return client.Post(url, contentType, nil)
+func Post(url, contentType string, body io.Reader) (*http.Response, error) {
+	return client.Post(url, contentType, body)
 }
 
 // Do executes an HTTP request with timeout

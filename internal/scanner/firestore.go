@@ -18,6 +18,9 @@ func CheckFirestore(job types.Job, results chan<- types.Finding, errors chan<- t
 
 	// Use authenticated request with token refresh capability
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		errors <- types.ScanError{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -27,7 +30,6 @@ func CheckFirestore(job types.Job, results chan<- types.Finding, errors chan<- t
 		}
 		return
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		// Only report non-404 errors (404 just means collection doesn't exist)
@@ -61,10 +63,12 @@ func ExtractFirestoreCollection(path string) (interface{}, error) {
 	url := fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s", state.ProjectID, path)
 
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch data (HTTP %d)", resp.StatusCode)
 	}
@@ -82,10 +86,12 @@ func ExtractFirestoreDocument(path, documentId string) (interface{}, error) {
 	url := fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s/%s", state.ProjectID, path, documentId)
 
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch document (HTTP %d)", resp.StatusCode)
 	}
@@ -110,11 +116,13 @@ func WriteFirestoreDocument(path, documentId string, data map[string]interface{}
 	}
 
 	resp, err := auth.MakeAuthenticatedRequestWithBody("PATCH", url, string(jsonData), state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("failed to write document (HTTP %d)", resp.StatusCode)
 	}

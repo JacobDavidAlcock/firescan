@@ -19,6 +19,9 @@ func CheckFunction(job types.Job, results chan<- types.Finding, errors chan<- ty
 	url := fmt.Sprintf("https://%s-%s.cloudfunctions.net/%s", region, state.ProjectID, funcName)
 
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		errors <- types.ScanError{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -28,7 +31,6 @@ func CheckFunction(job types.Job, results chan<- types.Finding, errors chan<- ty
 		}
 		return
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode == 200 {
 		results <- types.Finding{
 			Timestamp: time.Now().Format(time.RFC3339),

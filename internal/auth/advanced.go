@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"firescan/internal/config"
+	"firescan/internal/httpclient"
 	"firescan/internal/safety"
 	"firescan/internal/types"
 )
@@ -129,17 +130,18 @@ func testAlgorithmConfusion(state types.State, mode types.ScanMode) AuthAttackRe
 
 	// Test the malicious token against Firebase services
 	testURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/.json", state.ProjectID)
-	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	req, _ := http.NewRequest("GET", testURL, nil)
 	req.Header.Set("Authorization", "Bearer "+maliciousJWT)
-	
-	resp, err := client.Do(req)
+
+	resp, err := httpclient.Do(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		result.Error = err
 		return result
 	}
-	defer resp.Body.Close()
 
 	result.Successful = resp.StatusCode == 200
 	result.Details["response_status"] = resp.StatusCode

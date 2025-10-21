@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"firescan/internal/httpclient"
 )
 
 // GetAuthToken authenticates and returns token, userID, emailVerified status, and error
@@ -44,11 +46,13 @@ func SignIn(email, password, apiKey string) (string, string, bool, error) {
 // executeAuthRequest performs basic auth request (legacy function)
 func executeAuthRequest(url string, payload map[string]string) (string, error) {
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	if resp.StatusCode != http.StatusOK {
@@ -66,11 +70,13 @@ func executeAuthRequest(url string, payload map[string]string) (string, error) {
 // executeAuthRequestWithUserInfo performs auth request and returns user info
 func executeAuthRequestWithUserInfo(url string, payload map[string]string) (string, string, bool, error) {
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return "", "", false, err
 	}
-	defer resp.Body.Close()
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	if resp.StatusCode != http.StatusOK {
@@ -93,8 +99,6 @@ func executeAuthRequestWithUserInfo(url string, payload map[string]string) (stri
 
 // MakeAuthenticatedRequest creates an authenticated HTTP request with automatic token refresh
 func MakeAuthenticatedRequest(method, url, token, email, password, apiKey string, updateTokenFunc func(string, string, bool)) (*http.Response, error) {
-	client := &http.Client{Timeout: 10000000000} // 10 seconds in nanoseconds
-
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, err
@@ -102,11 +106,12 @@ func MakeAuthenticatedRequest(method, url, token, email, password, apiKey string
 
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := client.Do(req)
+	resp, err := httpclient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
+	// Note: We return resp to the caller, so caller must close resp.Body
 	if resp.StatusCode == http.StatusUnauthorized {
 		fmt.Println("\n[*] Token expired. Attempting to refresh...")
 
@@ -123,7 +128,7 @@ func MakeAuthenticatedRequest(method, url, token, email, password, apiKey string
 			}
 			
 			req.Header.Set("Authorization", "Bearer "+newToken)
-			return client.Do(req)
+			return httpclient.Do(req)
 		}
 		return resp, fmt.Errorf("token expired, but no credentials available to refresh")
 	}
@@ -138,12 +143,14 @@ func CheckEmailVerificationStatus(idToken, apiKey string) (bool, error) {
 	}
 	
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		var result map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&result)
@@ -176,12 +183,14 @@ func SendEmailVerification(idToken, apiKey string) error {
 	}
 	
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		var result map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&result)
@@ -190,7 +199,7 @@ func SendEmailVerification(idToken, apiKey string) error {
 		}
 		return fmt.Errorf("unexpected verification email API error (HTTP %d)", resp.StatusCode)
 	}
-	
+
 	return nil
 }
 
@@ -242,11 +251,13 @@ func probeAuthProvider(provider, apiKey string) bool {
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
 
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
