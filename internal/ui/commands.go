@@ -222,6 +222,7 @@ func HandleScan(args []string) {
 	
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
+	rateLimit := scanFlags.Int("rate-limit", 0, "Rate limit in requests/second (0=unlimited, recommended: 10-50).")
 
 	scanFlags.Parse(args)
 
@@ -229,6 +230,11 @@ func HandleScan(args []string) {
 	if err := validation.ValidateConcurrency(*concurrency); err != nil {
 		fmt.Printf("❌ %v\n", err)
 		return
+	}
+
+	// Show rate limit info if enabled
+	if *rateLimit > 0 {
+		fmt.Printf("[*] Rate limiting enabled: %d requests/second\n", *rateLimit)
 	}
 
 	// Determine scan mode
@@ -328,6 +334,7 @@ func HandleScan(args []string) {
 			HostingTest:   *hostingTest,
 			JSONOutput:    *jsonOutput,
 			Concurrency:   *concurrency,
+			RateLimit:     *rateLimit,
 		}
 
 		findings, err := scanner.RunScan(options)

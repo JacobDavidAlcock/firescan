@@ -1,12 +1,14 @@
 package scanner
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"firescan/internal/config"
+	"firescan/internal/ratelimit"
 	"firescan/internal/types"
 	"firescan/internal/wordlist"
 )
@@ -16,15 +18,16 @@ var FunctionRegions = []string{"us-central1", "us-east1", "us-east4", "europe-we
 
 // ScanOptions represents scan configuration options
 type ScanOptions struct {
-	List          string
-	AllScan       bool
-	RTDBTest      bool
-	FirestoreTest bool
-	StorageTest   bool
-	FunctionsTest bool
-	HostingTest   bool
-	JSONOutput    bool
-	Concurrency   int
+	List           string
+	AllScan        bool
+	RTDBTest       bool
+	FirestoreTest  bool
+	StorageTest    bool
+	FunctionsTest  bool
+	HostingTest    bool
+	JSONOutput     bool
+	Concurrency    int
+	RateLimit      int // requests per second (0 = unlimited)
 }
 
 // RunScan executes the scan with the given options
@@ -41,6 +44,10 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 		return nil, fmt.Errorf("error loading wordlist: %v", err)
 	}
 
+	// Setup rate limiter
+	limiter := ratelimit.NewLimiter(options.RateLimit)
+	ctx := context.Background()
+
 	// Setup worker pool
 	jobs := make(chan types.Job, options.Concurrency)
 	results := make(chan types.Finding)
@@ -49,7 +56,7 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 
 	for i := 0; i < options.Concurrency; i++ {
 		wg.Add(1)
-		go worker(jobs, results, errors, &wg)
+		go worker(jobs, results, errors, limiter, ctx, &wg)
 	}
 
 	// Calculate total checks
@@ -193,9 +200,15 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 }
 
 // worker processes jobs from the job channel
-func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- types.ScanError, wg *sync.WaitGroup) {
+func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- types.ScanError, limiter *ratelimit.Limiter, ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for job := range jobs {
+		// Apply rate limiting before each request
+		if err := limiter.Wait(ctx); err != nil {
+			// Context cancelled, stop processing
+			return
+		}
+
 		switch job.Type {
 		case "rtdb":
 			CheckRTDB(job, results, errors)
