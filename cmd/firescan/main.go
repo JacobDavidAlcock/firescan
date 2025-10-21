@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"firescan/internal/auth"
 	"firescan/internal/config"
+	"firescan/internal/logger"
 	"firescan/internal/types"
 	"firescan/internal/ui"
 )
@@ -15,9 +17,28 @@ func main() {
 	// Handle startup flags like --config and --resume before entering the interactive loop.
 	var configPath string
 	var resumeSession bool
+	var logFile string
+	var logLevel string
 	flag.StringVar(&configPath, "config", "", "Path to a YAML configuration file.")
 	flag.BoolVar(&resumeSession, "resume", false, "Resume from a saved session.")
+	flag.StringVar(&logFile, "log", "", "Path to log file (default: ./firescan.log).")
+	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warning, error, critical.")
 	flag.Parse()
+
+	// Initialize logger
+	level := parseLogLevel(logLevel)
+	if logFile == "" {
+		// Default log file location
+		homeDir, _ := os.UserHomeDir()
+		logFile = filepath.Join(homeDir, ".firescan", "firescan.log")
+	}
+	if err := logger.Init(logFile, level, false); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to initialize logger: %v\n", err)
+		fmt.Println("   Continuing without file logging...")
+	} else {
+		logger.Info("FireScan started")
+	}
+	defer logger.Close()
 
 	if resumeSession {
 		err := handleResumeSession()
@@ -68,4 +89,22 @@ func handleResumeSession() error {
 	}
 
 	return nil
+}
+
+// parseLogLevel parses log level string to LogLevel
+func parseLogLevel(level string) logger.LogLevel {
+	switch level {
+	case "debug":
+		return logger.DEBUG
+	case "info":
+		return logger.INFO
+	case "warning":
+		return logger.WARNING
+	case "error":
+		return logger.ERROR
+	case "critical":
+		return logger.CRITICAL
+	default:
+		return logger.INFO
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"firescan/internal/config"
+	"firescan/internal/logger"
 	"firescan/internal/ratelimit"
 	"firescan/internal/types"
 	"firescan/internal/wordlist"
@@ -32,17 +33,26 @@ type ScanOptions struct {
 
 // RunScan executes the scan with the given options
 func RunScan(options ScanOptions) ([]types.Finding, error) {
+	startTime := time.Now()
+
+	// Log scan start
+	logger.Info("Starting scan: projectID=%s concurrency=%d rateLimit=%d/s",
+		config.GetProjectID(), options.Concurrency, options.RateLimit)
+
 	// Validate state
 	state := config.GetState()
 	if state.ProjectID == "" || state.Token == "" {
+		logger.Error("Scan failed: projectID and token must be set")
 		return nil, fmt.Errorf("projectID and token must be set before scanning")
 	}
 
 	// Load wordlist
 	wordlistItems, err := wordlist.Load(options.List)
 	if err != nil {
+		logger.Error("Failed to load wordlist '%s': %v", options.List, err)
 		return nil, fmt.Errorf("error loading wordlist: %v", err)
 	}
+	logger.Debug("Loaded wordlist '%s' with %d items", options.List, len(wordlistItems))
 
 	// Setup rate limiter
 	limiter := ratelimit.NewLimiter(options.RateLimit)
@@ -194,6 +204,15 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	if !options.JSONOutput && errorCount > 0 {
 		fmt.Printf("\n%s⚠️  Scan completed with %d errors%s\n",
 			types.ColorYellow, errorCount, types.ColorReset)
+	}
+
+	// Log scan completion
+	duration := time.Since(startTime)
+	logger.Info("Scan completed: findings=%d errors=%d duration=%v", len(findings), errorCount, duration)
+
+	// Log each finding
+	for _, finding := range findings {
+		logger.LogFinding(finding.Severity, finding.Type, finding.Path, finding.Status)
 	}
 
 	return findings, nil
