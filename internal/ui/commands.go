@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -618,11 +619,18 @@ func HandleExtract(args []string) {
 	isFirestore := extractFlags.Bool("firestore", false, "Extract from a Firestore collection.")
 	isRTDB := extractFlags.Bool("rtdb", false, "Extract from a Realtime Database node.")
 	path := extractFlags.String("path", "", "The path/collection to extract.")
+	documentId := extractFlags.String("documentId", "", "The document ID to extract (Firestore only).")
+	outputFile := extractFlags.String("output", "", "Save output to file instead of printing to console.")
 
 	extractFlags.Parse(args)
 
 	if (!*isFirestore && !*isRTDB) || *path == "" {
-		fmt.Println("Usage: extract [--firestore | --rtdb] --path <collection_or_node_path>")
+		fmt.Println("Usage: extract [--firestore | --rtdb] --path <collection_or_node_path> [--documentId <document_id>] [--output <filename>]")
+		return
+	}
+
+	if *documentId != "" && !*isFirestore {
+		fmt.Println("❌ Error: --documentId can only be used with --firestore")
 		return
 	}
 
@@ -632,13 +640,21 @@ func HandleExtract(args []string) {
 		return
 	}
 
-	fmt.Printf("[*] Extracting data from path: %s\n", *path)
+	if *documentId != "" {
+		fmt.Printf("[*] Extracting document '%s' from path: %s\n", *documentId, *path)
+	} else {
+		fmt.Printf("[*] Extracting data from path: %s\n", *path)
+	}
 
 	var data interface{}
 	var err error
 
 	if *isFirestore {
-		data, err = scanner.ExtractFirestoreCollection(*path)
+		if *documentId != "" {
+			data, err = scanner.ExtractFirestoreDocument(*path, *documentId)
+		} else {
+			data, err = scanner.ExtractFirestoreCollection(*path)
+		}
 	} else {
 		data, err = scanner.ExtractRTDBNode(*path)
 	}
@@ -648,13 +664,149 @@ func HandleExtract(args []string) {
 		return
 	}
 
-	prettyJSON, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		fmt.Printf("❌ Error formatting JSON output: %v\n", err)
+	// Format the output to show document IDs clearly for Firestore collections
+	var formattedOutput string
+	if *isFirestore && *documentId == "" {
+		formattedOutput, err = formatFirestoreCollectionOutput(data)
+		if err != nil {
+			fmt.Printf("❌ Error formatting Firestore output: %v\n", err)
+			return
+		}
+	} else {
+		prettyJSON, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			fmt.Printf("❌ Error formatting JSON output: %v\n", err)
+			return
+		}
+		formattedOutput = string(prettyJSON)
+	}
+
+	// Output to file or console
+	if *outputFile != "" {
+		err = os.WriteFile(*outputFile, []byte(formattedOutput), 0644)
+		if err != nil {
+			fmt.Printf("❌ Error writing to file: %v\n", err)
+			return
+		}
+		fmt.Printf("✓ Data extracted and saved to: %s\n", *outputFile)
+	} else {
+		fmt.Println(formattedOutput)
+	}
+}
+
+// formatFirestoreCollectionOutput formats Firestore documents with clear document IDs
+func formatFirestoreCollectionOutput(data interface{}) (string, error) {
+	var result strings.Builder
+	
+	// Convert interface{} to slice of documents
+	documents, ok := data.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("unexpected data format for Firestore collection")
+	}
+	
+	result.WriteString(fmt.Sprintf("{\n  \"documents\": [\n"))
+	
+	for i, doc := range documents {
+		docMap, ok := doc.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		// Extract document ID from the name field
+		var documentId string
+		if nameField, exists := docMap["name"]; exists {
+			nameStr := fmt.Sprintf("%v", nameField)
+			// Firestore name format: projects/.../databases/.../documents/collection/docId
+			parts := strings.Split(nameStr, "/")
+			if len(parts) > 0 {
+				documentId = parts[len(parts)-1]
+			}
+		}
+		
+		result.WriteString(fmt.Sprintf("    {\n"))
+		result.WriteString(fmt.Sprintf("      \"DOCUMENT_ID\": \"%s\",\n", documentId))
+		
+		// Add the rest of the document data
+		docJSON, err := json.MarshalIndent(docMap, "      ", "  ")
+		if err != nil {
+			continue
+		}
+		
+		// Remove the outer braces and add proper indentation
+		docStr := string(docJSON)
+		docStr = strings.TrimSpace(docStr)
+		if strings.HasPrefix(docStr, "{") && strings.HasSuffix(docStr, "}") {
+			docStr = docStr[1 : len(docStr)-1]
+		}
+		docStr = strings.TrimSpace(docStr)
+		if docStr != "" {
+			result.WriteString(fmt.Sprintf("      %s\n", strings.ReplaceAll(docStr, "\n", "\n      ")))
+		}
+		
+		if i < len(documents)-1 {
+			result.WriteString("    },\n")
+		} else {
+			result.WriteString("    }\n")
+		}
+	}
+	
+	result.WriteString("  ]\n}")
+	
+	return result.String(), nil
+}
+
+// HandleWrite handles the 'write' command for writing data to Firebase
+func HandleWrite(args []string) {
+	writeFlags := flag.NewFlagSet("write", flag.ContinueOnError)
+	isFirestore := writeFlags.Bool("firestore", false, "Write to Firestore.")
+	path := writeFlags.String("path", "", "The collection path to write to.")
+	documentId := writeFlags.String("documentId", "", "The document ID to write.")
+
+	writeFlags.Parse(args)
+
+	if !*isFirestore || *path == "" || *documentId == "" {
+		fmt.Println("Usage: write --firestore --path <collection> --documentId <doc_id> <json_data>")
 		return
 	}
 
-	fmt.Println(string(prettyJSON))
+	state := config.GetState()
+	if state.ProjectID == "" || state.Token == "" {
+		fmt.Println("❌ Error: projectID and token must be set before writing. Use 'set' and 'auth'.")
+		return
+	}
+
+	// Get the remaining args as JSON data
+	remainingArgs := writeFlags.Args()
+	if len(remainingArgs) == 0 {
+		fmt.Println("❌ Error: JSON data is required")
+		fmt.Println("Usage: write --firestore --path <collection> --documentId <doc_id> <json_data>")
+		fmt.Println("Example: write --firestore --path users --documentId user123 {\"name\": \"John\", \"age\": 30}")
+		return
+	}
+
+	// Join all remaining arguments to handle JSON with spaces
+	jsonString := strings.Join(remainingArgs, " ")
+
+	// Parse JSON data
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(jsonString), &data)
+	if err != nil {
+		fmt.Printf("❌ Error parsing JSON data: %v\n", err)
+		fmt.Println("Make sure your JSON is properly formatted:")
+		fmt.Println("Example: {\"name\": \"John\", \"age\": 30}")
+		return
+	}
+
+	fmt.Printf("[*] Writing data to document '%s' in collection '%s'...\n", *documentId, *path)
+
+	if *isFirestore {
+		err = scanner.WriteFirestoreDocument(*path, *documentId, data)
+		if err != nil {
+			fmt.Printf("❌ Error writing to Firestore: %v\n", err)
+			return
+		}
+		fmt.Printf("✅ Successfully wrote data to Firestore document: %s/%s\n", *path, *documentId)
+	}
 }
 
 // HandleWordlist handles the 'wordlist' command exactly as in original

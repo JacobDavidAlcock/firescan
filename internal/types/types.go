@@ -40,6 +40,14 @@ type Job struct {
 	Path string
 }
 
+// ScanError represents an error that occurred during scanning
+type ScanError struct {
+	Timestamp string
+	JobType   string
+	Path      string
+	Message   string
+}
+
 // SavedSession represents a saved authentication session - exactly as in original
 type SavedSession struct {
 	Name      string    `yaml:"name"`

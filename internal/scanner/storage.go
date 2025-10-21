@@ -12,17 +12,37 @@ import (
 )
 
 // CheckCloudStorage checks if Cloud Storage bucket is listable
-func CheckCloudStorage(results chan<- types.Finding, wg *sync.WaitGroup) {
+func CheckCloudStorage(results chan<- types.Finding, errors chan<- types.ScanError, wg *sync.WaitGroup) {
 	defer wg.Done()
 	state := config.GetState()
 	bucketName := fmt.Sprintf("%s.appspot.com", state.ProjectID)
 	url := fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s/o", bucketName)
 
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
-	if err != nil || resp.StatusCode != http.StatusOK {
+	if err != nil {
+		errors <- types.ScanError{
+			Timestamp: time.Now().Format(time.RFC3339),
+			JobType:   "Storage",
+			Path:      bucketName,
+			Message:   err.Error(),
+		}
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Only report non-404 errors
+		if resp.StatusCode != http.StatusNotFound {
+			errors <- types.ScanError{
+				Timestamp: time.Now().Format(time.RFC3339),
+				JobType:   "Storage",
+				Path:      bucketName,
+				Message:   fmt.Sprintf("HTTP %d", resp.StatusCode),
+			}
+		}
+		return
+	}
+
 	results <- types.Finding{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Severity:  "Critical",

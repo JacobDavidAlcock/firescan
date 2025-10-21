@@ -44,11 +44,12 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	// Setup worker pool
 	jobs := make(chan types.Job, options.Concurrency)
 	results := make(chan types.Finding)
+	errors := make(chan types.ScanError)
 	var wg sync.WaitGroup
 
 	for i := 0; i < options.Concurrency; i++ {
 		wg.Add(1)
-		go worker(jobs, results, &wg)
+		go worker(jobs, results, errors, &wg)
 	}
 
 	// Calculate total checks
@@ -72,20 +73,27 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	findings := make([]types.Finding, 0)
 	var foundCount int32
 	var checkedCount int64
+	var errorCount int32
 
 	// Start progress monitoring
 	done := make(chan bool)
+	resultsOpen := true
+	errorsOpen := true
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		spinners := []rune{'|', '/', '-', '\\'}
 		i := 0
-		for {
+		for resultsOpen || errorsOpen {
 			select {
 			case finding, ok := <-results:
 				if !ok {
-					done <- true
-					return
+					resultsOpen = false
+					if !errorsOpen {
+						done <- true
+						return
+					}
+					continue
 				}
 				atomic.AddInt32(&foundCount, 1)
 				if options.JSONOutput {
@@ -94,13 +102,37 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 					fmt.Printf("\r%80s\r", "")
 					printFinding(finding)
 				}
+			case scanErr, ok := <-errors:
+				if !ok {
+					errorsOpen = false
+					if !resultsOpen {
+						done <- true
+						return
+					}
+					continue
+				}
+				atomic.AddInt32(&errorCount, 1)
+				if !options.JSONOutput {
+					// Show error briefly in status line
+					fmt.Printf("\r%80s\r", "")
+					fmt.Printf("%s[!] Error checking %s %s: %s%s\n",
+						types.ColorYellow, scanErr.JobType, scanErr.Path, scanErr.Message, types.ColorReset)
+				}
 			case <-ticker.C:
 				if !options.JSONOutput {
 					currentChecked := atomic.LoadInt64(&checkedCount)
 					currentFound := atomic.LoadInt32(&foundCount)
-					fmt.Printf("\r[%s%c%s] Scanning... [Checked: %d/%d | Found: %d]", 
-						types.ColorCyan, spinners[i%len(spinners)], types.ColorReset, 
-						currentChecked, totalChecks, currentFound)
+					currentErrors := atomic.LoadInt32(&errorCount)
+					if currentErrors > 0 {
+						fmt.Printf("\r[%s%c%s] Scanning... [Checked: %d/%d | Found: %d | Errors: %s%d%s]",
+							types.ColorCyan, spinners[i%len(spinners)], types.ColorReset,
+							currentChecked, totalChecks, currentFound,
+							types.ColorYellow, currentErrors, types.ColorReset)
+					} else {
+						fmt.Printf("\r[%s%c%s] Scanning... [Checked: %d/%d | Found: %d]",
+							types.ColorCyan, spinners[i%len(spinners)], types.ColorReset,
+							currentChecked, totalChecks, currentFound)
+					}
 					i++
 				}
 			}
@@ -132,14 +164,14 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	if options.StorageTest {
 		wg.Add(1)
 		go func() {
-			CheckCloudStorage(results, &wg)
+			CheckCloudStorage(results, errors, &wg)
 			atomic.AddInt64(&checkedCount, 1)
 		}()
 	}
 	if options.HostingTest {
 		wg.Add(1)
 		go func() {
-			CheckHostingConfig(results, &wg)
+			CheckHostingConfig(results, errors, &wg)
 			atomic.AddInt64(&checkedCount, 1)
 		}()
 	}
@@ -148,22 +180,29 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	wg.Wait()
 	time.Sleep(200 * time.Millisecond)
 	close(results)
+	close(errors)
 	<-done
+
+	// Print summary with error count
+	if !options.JSONOutput && errorCount > 0 {
+		fmt.Printf("\n%s⚠️  Scan completed with %d errors%s\n",
+			types.ColorYellow, errorCount, types.ColorReset)
+	}
 
 	return findings, nil
 }
 
 // worker processes jobs from the job channel
-func worker(jobs <-chan types.Job, results chan<- types.Finding, wg *sync.WaitGroup) {
+func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- types.ScanError, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for job := range jobs {
 		switch job.Type {
 		case "rtdb":
-			CheckRTDB(job, results)
+			CheckRTDB(job, results, errors)
 		case "firestore":
-			CheckFirestore(job, results)
+			CheckFirestore(job, results, errors)
 		case "function":
-			CheckFunction(job, results)
+			CheckFunction(job, results, errors)
 		}
 	}
 }

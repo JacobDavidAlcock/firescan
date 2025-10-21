@@ -11,7 +11,7 @@ import (
 )
 
 // CheckFunction checks a Cloud Function for accessibility
-func CheckFunction(job types.Job, results chan<- types.Finding) {
+func CheckFunction(job types.Job, results chan<- types.Finding, errors chan<- types.ScanError) {
 	parts := strings.Split(job.Path, "/")
 	region, funcName := parts[0], parts[1]
 
@@ -20,6 +20,12 @@ func CheckFunction(job types.Job, results chan<- types.Finding) {
 
 	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
 	if err != nil {
+		errors <- types.ScanError{
+			Timestamp: time.Now().Format(time.RFC3339),
+			JobType:   "Function",
+			Path:      funcName,
+			Message:   err.Error(),
+		}
 		return
 	}
 	defer resp.Body.Close()

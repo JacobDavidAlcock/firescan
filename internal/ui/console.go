@@ -94,8 +94,10 @@ func PrintHelp() {
 	fmt.Println("    --json                Output results in JSON format.")
 	fmt.Println("    -c <num>              Set concurrency level.")
 	fmt.Println("  extract               Dump data from a readable path.")
-	fmt.Println("    --firestore --path <collection>")
-	fmt.Println("    --rtdb --path <node>")
+	fmt.Println("    --firestore --path <collection> [--documentId <doc_id>] [--output <filename>]")
+	fmt.Println("    --rtdb --path <node> [--output <filename>]")
+	fmt.Println("  write                 Write data to a Firebase path.")
+	fmt.Println("    --firestore --path <collection> --documentId <doc_id> <json_data>")
 	fmt.Println("  wordlist <cmd> [opts] Manage wordlists for the current session.")
 	fmt.Println("    show                  List available built-in wordlists.")
 	fmt.Println("    show <name>           Show contents of a specific list.")
@@ -171,6 +173,11 @@ func RunConsole() error {
 			readline.PcItem("--rtdb"),
 			readline.PcItem("--path"),
 		),
+		readline.PcItem("write",
+			readline.PcItem("--firestore"),
+			readline.PcItem("--path"),
+			readline.PcItem("--documentId"),
+		),
 		readline.PcItem("wordlist",
 			readline.PcItem("show"),
 			readline.PcItem("add"),
@@ -220,6 +227,8 @@ func RunConsole() error {
 			HandleScan(args)
 		case "extract":
 			HandleExtract(args)
+		case "write":
+			HandleWrite(args)
 		case "wordlist":
 			HandleWordlist(args)
 		case "make-config":
