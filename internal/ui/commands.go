@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +20,7 @@ import (
 	"firescan/internal/storage"
 	"firescan/internal/types"
 	"firescan/internal/unauth"
+	"firescan/internal/validation"
 	"firescan/internal/wordlist"
 )
 
@@ -35,16 +35,22 @@ func HandleSet(args []string) {
 
 	switch variable {
 	case "projectid":
-		// Basic validation for Firebase project ID format.
-		re := regexp.MustCompile(`^[a-z0-9-]{6,30}$`)
-		if !re.MatchString(value) {
-			fmt.Println("❌ Invalid projectID format. Must be 6-30 lowercase letters, numbers, or hyphens.")
+		if err := validation.ValidateProjectID(value); err != nil {
+			fmt.Printf("❌ Invalid project ID: %v\n", err)
 			return
 		}
 		config.SetProjectID(value)
 	case "apikey":
+		if err := validation.ValidateAPIKey(value); err != nil {
+			fmt.Printf("⚠️  Warning: %v\n", err)
+			fmt.Println("   Setting anyway, but this may cause authentication issues.")
+		}
 		config.SetAPIKey(value)
 	case "token":
+		if err := validation.ValidateJWT(value); err != nil {
+			fmt.Printf("⚠️  Warning: %v\n", err)
+			fmt.Println("   Setting anyway, but this token may be invalid.")
+		}
 		config.SetToken(value)
 	default:
 		fmt.Printf("❌ Unknown variable: %s. Available: projectID, apiKey, token\n", variable)
@@ -125,6 +131,11 @@ func HandleAuth(args []string) {
 		// Use provided email or default to fire@scan.com
 		if *createAccountEmail != "" {
 			authEmail = *createAccountEmail
+			// Validate custom email
+			if err := validation.ValidateEmail(authEmail); err != nil {
+				fmt.Printf("❌ Invalid email: %v\n", err)
+				return
+			}
 		} else {
 			authEmail = "fire@scan.com"
 		}
@@ -133,6 +144,11 @@ func HandleAuth(args []string) {
 	} else if *email != "" && *password != "" {
 		authEmail = *email
 		authPassword = *password
+		// Validate email format
+		if err := validation.ValidateEmail(authEmail); err != nil {
+			fmt.Printf("⚠️  Warning: %v\n", err)
+			fmt.Println("   Proceeding anyway, but authentication may fail.")
+		}
 		fmt.Printf("[*] Attempting to login with %s...\n", authEmail)
 	} else {
 		fmt.Println("Usage: auth [--create-account [--email <email>]] | [-e <email> -P <password>] | [logout] | [show-token] | [status] | [refresh] | [--enum-providers]")
@@ -208,6 +224,12 @@ func HandleScan(args []string) {
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
 
 	scanFlags.Parse(args)
+
+	// Validate concurrency
+	if err := validation.ValidateConcurrency(*concurrency); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		return
+	}
 
 	// Determine scan mode
 	var scanMode types.ScanMode = types.ProbeMode // Default to probe mode
@@ -769,6 +791,18 @@ func HandleWrite(args []string) {
 		return
 	}
 
+	// Validate collection path
+	if err := validation.ValidateCollectionPath(*path); err != nil {
+		fmt.Printf("❌ Invalid collection path: %v\n", err)
+		return
+	}
+
+	// Validate document ID
+	if err := validation.ValidateDocumentID(*documentId); err != nil {
+		fmt.Printf("❌ Invalid document ID: %v\n", err)
+		return
+	}
+
 	state := config.GetState()
 	if state.ProjectID == "" || state.Token == "" {
 		fmt.Println("❌ Error: projectID and token must be set before writing. Use 'set' and 'auth'.")
@@ -787,13 +821,19 @@ func HandleWrite(args []string) {
 	// Join all remaining arguments to handle JSON with spaces
 	jsonString := strings.Join(remainingArgs, " ")
 
+	// Validate JSON before parsing
+	if err := validation.ValidateJSON(jsonString); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		fmt.Println("Make sure your JSON is properly formatted:")
+		fmt.Println("Example: {\"name\": \"John\", \"age\": 30}")
+		return
+	}
+
 	// Parse JSON data
 	var data map[string]interface{}
 	err := json.Unmarshal([]byte(jsonString), &data)
 	if err != nil {
 		fmt.Printf("❌ Error parsing JSON data: %v\n", err)
-		fmt.Println("Make sure your JSON is properly formatted:")
-		fmt.Println("Example: {\"name\": \"John\", \"age\": 30}")
 		return
 	}
 
@@ -840,6 +880,11 @@ func HandleWordlist(args []string) {
 			return
 		}
 		listName := args[1]
+		// Validate wordlist name
+		if err := validation.ValidateWordlistName(listName); err != nil {
+			fmt.Printf("❌ Invalid wordlist name: %v\n", err)
+			return
+		}
 		words := strings.Split(args[2], ",")
 		wordlist.Add(listName, words)
 		fmt.Printf("✓ Successfully added session wordlist '%s' with %d words.\n", listName, len(words))
