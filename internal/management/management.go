@@ -326,7 +326,7 @@ func testBillingConfiguration(state types.State, mode types.ScanMode) []Manageme
 			apiVersion:  "cloudbilling",
 		},
 		{
-			path:        fmt.Sprintf("/v1/services/firebase.googleapis.com/consumerQuotaMetrics", state.ProjectID),
+			path:        "/v1/services/firebase.googleapis.com/consumerQuotaMetrics",
 			description: "Firebase API quota information",
 			apiVersion:  "serviceusage",
 		},

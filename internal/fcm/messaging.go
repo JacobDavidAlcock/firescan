@@ -581,7 +581,7 @@ func testTokenEnumeration(state types.State) TokenEnumerationTest {
 	resp, err := http.Post(batchURL+"?key="+state.APIKey, "application/json", strings.NewReader(`{}`))
 	if err == nil {
 		defer resp.Body.Close()
-		if resp.StatusCode != 400 && resp.StatusCode != 403 {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			result.EnumerationPossible = true
 			result.EnumerationMethod = "batch_operation_enumeration"
 		}
@@ -656,8 +656,7 @@ func testInAppMessagingEndpoints(state types.State) InAppMessagingAccess {
 	postResp, err := http.Post(injectURL, "application/json", strings.NewReader(`{"test": "content"}`))
 	if err == nil {
 		defer postResp.Body.Close()
-		// If we don't get immediate authentication error, content injection might be possible
-		if postResp.StatusCode != 401 && postResp.StatusCode != 403 {
+		if postResp.StatusCode >= 200 && postResp.StatusCode < 300 {
 			result.ContentInjectable = true
 		}
 	}
