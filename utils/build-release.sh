@@ -42,24 +42,23 @@ for platform in "${!platforms[@]}"; do
     IFS='/' read -r GOOS GOARCH <<< "$platform"
     EXT="${platforms[$platform]}"
     BINARY="firescan-${GOOS}-${GOARCH}${EXT}"
-    
-    if [[ "$GOOS" == "windows" ]]; then
-        ARCHIVE="${BINARY%.*}.zip"
-        echo "  Creating ${ARCHIVE}..."
-        zip -q "$ARCHIVE" "$BINARY"
-    else
-        ARCHIVE="${BINARY}.tar.gz"
-        echo "  Creating ${ARCHIVE}..."
-        tar -czf "$ARCHIVE" "$BINARY"
-    fi
+    ARCHIVE="firescan-${GOOS}-${GOARCH}.tar.gz"
+
+    echo "  Creating ${ARCHIVE}..."
+    tar -czf "$ARCHIVE" "$BINARY"
+    rm "$BINARY"
 done
 
-echo "✅ Build complete! Distribution files created in dist/:"
-ls -la *.zip *.tar.gz 2>/dev/null || echo "No archives found"
+echo "📊 Generating SHA256 checksums..."
+sha256sum *.tar.gz > SHA256SUMS.txt
 
 echo ""
+echo "✅ Build complete! Distribution files created in dist/:"
+echo ""
+cat SHA256SUMS.txt
+echo ""
 echo "📊 File sizes:"
-du -h *.zip *.tar.gz 2>/dev/null || echo "No archives to show sizes for"
+ls -lh *.tar.gz
 
 cd ..
 echo "🎉 Release build finished!"
