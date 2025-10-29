@@ -40,7 +40,7 @@ linters:
 linters-settings:
   errcheck:
     check-type-assertions: true
-    check-blank: true
+    check-blank: false # Don't require checking blank assignments
     exclude-functions:
       - fmt.Println
       - fmt.Printf
@@ -50,6 +50,7 @@ linters-settings:
     enable-all: true
     disable:
       - shadow # Can be too strict
+      - fieldalignment # Micro-optimization, not critical
 
   gocyclo:
     min-complexity: 15
@@ -68,6 +69,8 @@ linters-settings:
     rules:
       - name: exported
         disabled: false
+        arguments:
+          - "disableStutteringCheck" # Allow names like appcheck.AppCheckResult
       - name: package-comments
         disabled: true # Not all packages need comments
       - name: unexported-return

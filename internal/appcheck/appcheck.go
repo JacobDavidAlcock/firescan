@@ -13,8 +13,8 @@ import (
 	"firescan/internal/types"
 )
 
-// AppCheckProvider represents different App Check providers
-type AppCheckProvider struct {
+// Provider represents different App Check providers
+type Provider struct {
 	Name        string
 	Enabled     bool
 	ConfigURL   string
@@ -22,8 +22,8 @@ type AppCheckProvider struct {
 	Description string
 }
 
-// AppCheckResult represents App Check test results
-type AppCheckResult struct {
+// Result represents App Check test results
+type Result struct {
 	Provider     string
 	Enabled      bool
 	HasDebugMode bool
@@ -34,8 +34,8 @@ type AppCheckResult struct {
 }
 
 // GetAppCheckProviders returns list of App Check providers to test
-func GetAppCheckProviders() []AppCheckProvider {
-	return []AppCheckProvider{
+func GetAppCheckProviders() []Provider {
+	return []Provider{
 		{
 			Name:        "Play Integrity",
 			ConfigURL:   "https://firebaseappcheck.googleapis.com/v1/projects/{projectId}/apps/{appId}:exchangePlayIntegrityToken",
@@ -64,12 +64,12 @@ func GetAppCheckProviders() []AppCheckProvider {
 }
 
 // TestAppCheck performs comprehensive App Check security testing
-func TestAppCheck(mode types.ScanMode) ([]AppCheckResult, error) {
+func TestAppCheck(mode types.ScanMode) ([]Result, error) {
 	if !safety.WarnUser(mode) {
 		return nil, fmt.Errorf("user declined to proceed with App Check testing")
 	}
 
-	var results []AppCheckResult
+	results := make([]Result, 0, 10)
 	state := config.GetState()
 	providers := GetAppCheckProviders()
 
@@ -95,8 +95,8 @@ func TestAppCheck(mode types.ScanMode) ([]AppCheckResult, error) {
 }
 
 // testAppCheckProvider tests a specific App Check provider
-func testAppCheckProvider(provider AppCheckProvider, mode types.ScanMode, state types.State) AppCheckResult {
-	result := AppCheckResult{
+func testAppCheckProvider(provider Provider, mode types.ScanMode, state types.State) Result {
+	result := Result{
 		Provider:    provider.Name,
 		SafetyLevel: mode,
 		Details:     make(map[string]interface{}),
@@ -134,8 +134,8 @@ func testAppCheckProvider(provider AppCheckProvider, mode types.ScanMode, state 
 }
 
 // testDebugTokensInProduction checks for debug tokens in production (critical vulnerability)
-func testDebugTokensInProduction(state types.State) AppCheckResult {
-	result := AppCheckResult{
+func testDebugTokensInProduction(state types.State) Result {
+	result := Result{
 		Provider:    "Debug Token Security Check",
 		SafetyLevel: types.TestMode,
 		Details:     make(map[string]interface{}),
@@ -166,11 +166,11 @@ func testDebugTokensInProduction(state types.State) AppCheckResult {
 }
 
 // testAppCheckBypass tests various App Check bypass techniques
-func testAppCheckBypass(state types.State) []AppCheckResult {
-	var results []AppCheckResult
+func testAppCheckBypass(state types.State) []Result {
+	var results []Result
 
 	// Test 1: Direct API access without App Check token
-	bypassResult1 := AppCheckResult{
+	bypassResult1 := Result{
 		Provider:    "Direct API Bypass Test",
 		SafetyLevel: types.AuditMode,
 		Details:     make(map[string]interface{}),
@@ -179,10 +179,15 @@ func testAppCheckBypass(state types.State) []AppCheckResult {
 	// Test direct access to Firebase APIs without App Check headers
 	rtdbURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/.json", state.ProjectID)
 	client := &http.Client{Timeout: 10 * time.Second}
-	
-	req, _ := http.NewRequest("GET", rtdbURL, nil)
+
+	req, err := http.NewRequest("GET", rtdbURL, nil)
+	if err != nil {
+		bypassResult1.Error = err
+		results = append(results, bypassResult1)
+		return results
+	}
 	// Intentionally NOT adding App Check headers
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		bypassResult1.Error = err
@@ -195,15 +200,20 @@ func testAppCheckBypass(state types.State) []AppCheckResult {
 	results = append(results, bypassResult1)
 
 	// Test 2: Invalid App Check token acceptance
-	bypassResult2 := AppCheckResult{
+	bypassResult2 := Result{
 		Provider:    "Invalid Token Test",
 		SafetyLevel: types.AuditMode,
 		Details:     make(map[string]interface{}),
 	}
 
-	req2, _ := http.NewRequest("GET", rtdbURL, nil)
+	req2, err := http.NewRequest("GET", rtdbURL, nil)
+	if err != nil {
+		bypassResult2.Error = err
+		results = append(results, bypassResult2)
+		return results
+	}
 	req2.Header.Set("X-Firebase-AppCheck", "invalid-token-12345")
-	
+
 	resp2, err := client.Do(req2)
 	if err != nil {
 		bypassResult2.Error = err
@@ -219,13 +229,13 @@ func testAppCheckBypass(state types.State) []AppCheckResult {
 }
 
 // FormatAppCheckResults formats App Check test results for display
-func FormatAppCheckResults(results []AppCheckResult) {
+func FormatAppCheckResults(results []Result) {
 	fmt.Printf("\n%s=== Firebase App Check Security Analysis ===%s\n", types.ColorCyan, types.ColorReset)
-	
+
 	for _, result := range results {
 		status := "✓"
 		statusColor := types.ColorGreen
-		
+
 		if result.Error != nil {
 			status = "✗"
 			statusColor = types.ColorRed
@@ -233,23 +243,23 @@ func FormatAppCheckResults(results []AppCheckResult) {
 			status = "⚠"
 			statusColor = types.ColorYellow
 		}
-		
+
 		fmt.Printf("%s%s %s%s\n", statusColor, status, result.Provider, types.ColorReset)
 		fmt.Printf("  Enabled: %v\n", result.Enabled)
 		fmt.Printf("  Accessible: %v\n", result.Accessible)
-		
+
 		if result.HasDebugMode {
 			fmt.Printf("  %sWARNING: Debug mode detected%s\n", types.ColorYellow, types.ColorReset)
 		}
-		
+
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
-		
+
 		if len(result.Details) > 0 {
 			fmt.Printf("  Details: %v\n", result.Details)
 		}
-		
+
 		fmt.Println()
 	}
 }

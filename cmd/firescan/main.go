@@ -41,14 +41,14 @@ func main() {
 	defer logger.Close()
 
 	if resumeSession {
-		err := handleResumeSession()
-		if err != nil {
+		if err := handleResumeSession(); err != nil {
+			logger.Close()
 			fmt.Printf("❌ Error resuming session: %v\n", err)
 			os.Exit(1)
 		}
 	} else if configPath != "" {
-		err := config.LoadFromFile(configPath)
-		if err != nil {
+		if err := config.LoadFromFile(configPath); err != nil {
+			logger.Close()
 			fmt.Printf("❌ Error loading config file: %v\n", err)
 			os.Exit(1)
 		}
@@ -57,8 +57,7 @@ func main() {
 
 	ui.PrintBanner()
 
-	err := ui.RunConsole()
-	if err != nil {
+	if err := ui.RunConsole(); err != nil {
 		fmt.Printf("❌ Console error: %v\n", err)
 		os.Exit(1)
 	}
@@ -66,15 +65,14 @@ func main() {
 
 // handleResumeSession handles the --resume flag functionality
 func handleResumeSession() error {
-	err := config.ResumeSession()
-	if err != nil {
+	if err := config.ResumeSession(); err != nil {
 		return err
 	}
 
 	// Try to authenticate with stored credentials if available
 	email, password, _, _ := config.GetAuthInfo()
 	apiKey := config.GetAPIKey()
-	
+
 	if email != "" && password != "" && apiKey != "" {
 		fmt.Printf("[*] Attempting to authenticate with stored credentials for %s...\n", email)
 		token, userID, emailVerified, err := auth.SignIn(email, password, apiKey)

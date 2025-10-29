@@ -15,13 +15,13 @@ import (
 	"firescan/internal/types"
 )
 
-// AuthAttackResult represents advanced auth attack test results
-type AuthAttackResult struct {
+// AttackResult represents advanced auth attack test results
+type AttackResult struct {
 	Attack      string
 	Successful  bool
-	Details     map[string]interface{}
 	Error       error
 	SafetyLevel types.ScanMode
+	Details     map[string]interface{}
 }
 
 // JWTHeader represents JWT header structure
@@ -42,17 +42,17 @@ type JWTPayload struct {
 	Exp           int64                  `json:"exp"`
 	Email         string                 `json:"email,omitempty"`
 	EmailVerified bool                   `json:"email_verified,omitempty"`
-	Firebase      map[string]interface{} `json:"firebase,omitempty"`
 	CustomClaims  map[string]interface{} `json:",omitempty"`
+	Firebase      map[string]interface{} `json:"firebase,omitempty"`
 }
 
 // TestAdvancedAuth performs comprehensive advanced authentication attacks
-func TestAdvancedAuth(mode types.ScanMode) ([]AuthAttackResult, error) {
+func TestAdvancedAuth(mode types.ScanMode) ([]AttackResult, error) {
 	if !safety.WarnUser(mode) {
 		return nil, fmt.Errorf("user declined to proceed with advanced auth testing")
 	}
 
-	var results []AuthAttackResult
+	var results []AttackResult
 	state := config.GetState()
 
 	// Test 1: JWT Algorithm Confusion Attack (RS256 -> HS256)
@@ -87,8 +87,8 @@ func TestAdvancedAuth(mode types.ScanMode) ([]AuthAttackResult, error) {
 }
 
 // testAlgorithmConfusion tests RS256 -> HS256 algorithm confusion attack
-func testAlgorithmConfusion(state types.State, mode types.ScanMode) AuthAttackResult {
-	result := AuthAttackResult{
+func testAlgorithmConfusion(state types.State, mode types.ScanMode) AttackResult {
+	result := AttackResult{
 		Attack:      "JWT Algorithm Confusion (RS256->HS256)",
 		SafetyLevel: mode,
 		Details:     make(map[string]interface{}),
@@ -110,7 +110,7 @@ func testAlgorithmConfusion(state types.State, mode types.ScanMode) AuthAttackRe
 		Exp:      time.Now().Add(time.Hour).Unix(),
 		Email:    "attacker@malicious.com",
 		Firebase: map[string]interface{}{
-			"identities": map[string]interface{}{},
+			"identities":       map[string]interface{}{},
 			"sign_in_provider": "custom",
 		},
 		CustomClaims: map[string]interface{}{
@@ -151,8 +151,8 @@ func testAlgorithmConfusion(state types.State, mode types.ScanMode) AuthAttackRe
 }
 
 // testCustomClaimsInjection tests custom claims injection attacks
-func testCustomClaimsInjection(state types.State, mode types.ScanMode) AuthAttackResult {
-	result := AuthAttackResult{
+func testCustomClaimsInjection(state types.State, mode types.ScanMode) AttackResult {
+	result := AttackResult{
 		Attack:      "Custom Claims Injection",
 		SafetyLevel: mode,
 		Details:     make(map[string]interface{}),
@@ -175,8 +175,8 @@ func testCustomClaimsInjection(state types.State, mode types.ScanMode) AuthAttac
 }
 
 // testTokenExpirationBypass tests token expiration bypass techniques
-func testTokenExpirationBypass(state types.State, mode types.ScanMode) AuthAttackResult {
-	result := AuthAttackResult{
+func testTokenExpirationBypass(state types.State, mode types.ScanMode) AttackResult {
+	result := AttackResult{
 		Attack:      "Token Expiration Bypass",
 		SafetyLevel: mode,
 		Details:     make(map[string]interface{}),
@@ -204,8 +204,8 @@ func testTokenExpirationBypass(state types.State, mode types.ScanMode) AuthAttac
 }
 
 // testSignatureBypass tests JWT signature validation bypass
-func testSignatureBypass(state types.State, mode types.ScanMode) AuthAttackResult {
-	result := AuthAttackResult{
+func testSignatureBypass(state types.State, mode types.ScanMode) AttackResult {
+	result := AttackResult{
 		Attack:      "JWT Signature Bypass",
 		SafetyLevel: mode,
 		Details:     make(map[string]interface{}),
@@ -217,7 +217,7 @@ func testSignatureBypass(state types.State, mode types.ScanMode) AuthAttackResul
 	// 3. Modified signature
 	techniques := []string{
 		"none_algorithm",
-		"empty_signature", 
+		"empty_signature",
 		"modified_signature",
 		"wrong_signature",
 	}
@@ -231,8 +231,8 @@ func testSignatureBypass(state types.State, mode types.ScanMode) AuthAttackResul
 }
 
 // testMultiTenancyBypass tests multi-tenant project bypass
-func testMultiTenancyBypass(state types.State) AuthAttackResult {
-	result := AuthAttackResult{
+func testMultiTenancyBypass(state types.State) AttackResult {
+	result := AttackResult{
 		Attack:      "Multi-tenancy Bypass",
 		SafetyLevel: types.TestMode,
 		Details:     make(map[string]interface{}),
@@ -241,7 +241,7 @@ func testMultiTenancyBypass(state types.State) AuthAttackResult {
 	// Test cross-tenant access
 	testTenants := []string{
 		"tenant-1",
-		"tenant-2", 
+		"tenant-2",
 		"admin-tenant",
 		"default",
 	}
@@ -256,11 +256,11 @@ func testMultiTenancyBypass(state types.State) AuthAttackResult {
 }
 
 // testServiceAccountEnumeration enumerates service accounts
-func testServiceAccountEnumeration(state types.State) []AuthAttackResult {
-	var results []AuthAttackResult
+func testServiceAccountEnumeration(state types.State) []AttackResult {
+	var results []AttackResult
 
 	// Test service account discovery
-	saResult := AuthAttackResult{
+	saResult := AttackResult{
 		Attack:      "Service Account Enumeration",
 		SafetyLevel: types.AuditMode,
 		Details:     make(map[string]interface{}),
@@ -290,7 +290,7 @@ func createMaliciousJWT(header JWTHeader, payload JWTPayload, secret string) (st
 	}
 	headerEncoded := base64.RawURLEncoding.EncodeToString(headerBytes)
 
-	// Encode payload  
+	// Encode payload
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -307,13 +307,13 @@ func createMaliciousJWT(header JWTHeader, payload JWTPayload, secret string) (st
 }
 
 // FormatAuthAttackResults formats authentication attack results for display
-func FormatAuthAttackResults(results []AuthAttackResult) {
+func FormatAuthAttackResults(results []AttackResult) {
 	fmt.Printf("\n%s=== Advanced Authentication Security Analysis ===%s\n", types.ColorCyan, types.ColorReset)
-	
+
 	for _, result := range results {
 		status := "✓"
 		statusColor := types.ColorGreen
-		
+
 		if result.Error != nil {
 			status = "✗"
 			statusColor = types.ColorRed
@@ -321,22 +321,22 @@ func FormatAuthAttackResults(results []AuthAttackResult) {
 			status = "⚠"
 			statusColor = types.ColorYellow
 		}
-		
+
 		fmt.Printf("%s%s %s%s\n", statusColor, status, result.Attack, types.ColorReset)
 		fmt.Printf("  Successful: %v\n", result.Successful)
-		
+
 		if result.Successful {
 			fmt.Printf("  %sSECURITY VULNERABILITY DETECTED%s\n", types.ColorRed, types.ColorReset)
 		}
-		
+
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
-		
+
 		if desc, ok := result.Details["attack_description"]; ok {
 			fmt.Printf("  Description: %v\n", desc)
 		}
-		
+
 		fmt.Println()
 	}
 }
