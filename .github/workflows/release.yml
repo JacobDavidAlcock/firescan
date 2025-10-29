@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build for all platforms
+        run: |
+          mkdir -p dist
+
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" -o dist/firescan-linux-amd64 ./cmd/firescan
+          cd dist && tar -czf firescan-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz firescan-linux-amd64 && cd ..
+
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" -o dist/firescan-linux-arm64 ./cmd/firescan
+          cd dist && tar -czf firescan-${{ steps.get_version.outputs.VERSION }}-linux-arm64.tar.gz firescan-linux-arm64 && cd ..
+
+          # macOS AMD64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" -o dist/firescan-darwin-amd64 ./cmd/firescan
+          cd dist && tar -czf firescan-${{ steps.get_version.outputs.VERSION }}-darwin-amd64.tar.gz firescan-darwin-amd64 && cd ..
+
+          # macOS ARM64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" -o dist/firescan-darwin-arm64 ./cmd/firescan
+          cd dist && tar -czf firescan-${{ steps.get_version.outputs.VERSION }}-darwin-arm64.tar.gz firescan-darwin-arm64 && cd ..
+
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" -o dist/firescan-windows-amd64.exe ./cmd/firescan
+          cd dist && zip firescan-${{ steps.get_version.outputs.VERSION }}-windows-amd64.zip firescan-windows-amd64.exe && cd ..
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+            echo "Initial release" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+            git log $PREV_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: FireScan ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## 🔥 FireScan ${{ steps.get_version.outputs.VERSION }}
+
+            ### 📦 Downloads
+
+            Choose the appropriate binary for your platform:
+
+            - **Linux (AMD64)**: `firescan-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz`
+            - **Linux (ARM64)**: `firescan-${{ steps.get_version.outputs.VERSION }}-linux-arm64.tar.gz`
+            - **macOS (Intel)**: `firescan-${{ steps.get_version.outputs.VERSION }}-darwin-amd64.tar.gz`
+            - **macOS (Apple Silicon)**: `firescan-${{ steps.get_version.outputs.VERSION }}-darwin-arm64.tar.gz`
+            - **Windows (AMD64)**: `firescan-${{ steps.get_version.outputs.VERSION }}-windows-amd64.zip`
+
+            ### 📝 Installation
+
+            **Linux/macOS:**
+            ```bash
+            tar -xzf firescan-*.tar.gz
+            chmod +x firescan-*
+            sudo mv firescan-* /usr/local/bin/firescan
+            ```
+
+            **Windows:**
+            ```powershell
+            # Extract the ZIP file
+            # Add firescan.exe to your PATH or run directly
+            ```
+
+            ### ✅ Verify Installation
+            ```bash
+            firescan --version
+            ```
+
+            ### 🔐 Checksums
+            See `checksums.txt` for SHA256 checksums of all binaries.
+
+            ### 📋 Changes
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ---
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.get_version.outputs.VERSION }}
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        run: |
+          echo "🎉 Release ${{ steps.get_version.outputs.VERSION }} created successfully!"
+          echo "📦 Binaries uploaded:"
+          ls -lh dist/*.tar.gz dist/*.zip

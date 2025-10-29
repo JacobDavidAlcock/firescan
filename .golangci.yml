@@ -1,0 +1,122 @@
+# golangci-lint configuration for FireScan
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Default linters
+    - errcheck # Check for unchecked errors
+    - gosimple # Simplify code
+    - govet # Vet examines Go source code
+    - ineffassign # Detect ineffectual assignments
+    - staticcheck # Go static analysis
+    - unused # Check for unused code
+
+    # Additional recommended linters
+    - gofmt # Check code formatting
+    - goimports # Check import formatting
+    - misspell # Check for misspelled words
+    - revive # Fast, configurable, extensible linter
+    - gosec # Security problems
+    - bodyclose # Check HTTP response body is closed
+    - noctx # Check for sending HTTP request without context
+    - unparam # Check for unused function parameters
+    - unconvert # Remove unnecessary type conversions
+    - goconst # Find repeated strings that could be constants
+    - gocyclo # Check cyclomatic complexity
+    - dupl # Check for duplicate code
+    - gocritic # Comprehensive Go linter
+    - prealloc # Find slice declarations that could be preallocated
+    - exportloopref # Check for pointers to loop variables
+    - nilerr # Check for returning nil even if error is not nil
+
+  disable:
+    - typecheck # Can be slow and sometimes buggy
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - fmt.Println
+      - fmt.Printf
+      - fmt.Fprintf
+
+  govet:
+    enable-all: true
+    disable:
+      - shadow # Can be too strict
+
+  gocyclo:
+    min-complexity: 15
+
+  dupl:
+    threshold: 100
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: package-comments
+        disabled: true # Not all packages need comments
+      - name: unexported-return
+        disabled: false
+
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked (covered by errcheck)
+      - G304 # File path provided as taint input (we validate paths)
+    config:
+      G301: "0644" # Allow 0644 file permissions
+      G302: "0600" # Allow 0600 file permissions
+
+  staticcheck:
+    checks: ["all"]
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+
+    # Exclude known issues in specific files
+    - path: cmd/firescan/main.go
+      linters:
+        - errcheck # Main can ignore some errors
+
+    # Exclude shadow checking on short variable names
+    - text: 'shadow: declaration of "err"'
+      linters:
+        - govet
+
+    # Exclude some staticcheck messages
+    - linters:
+        - staticcheck
+      text: "SA9003:" # Empty branch
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
