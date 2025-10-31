@@ -14,6 +14,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	// Handle startup flags like --config and --resume before entering the interactive loop.
 	var configPath string
 	var resumeSession bool
@@ -42,15 +46,13 @@ func main() {
 
 	if resumeSession {
 		if err := handleResumeSession(); err != nil {
-			logger.Close()
 			fmt.Printf("❌ Error resuming session: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 	} else if configPath != "" {
 		if err := config.LoadFromFile(configPath); err != nil {
-			logger.Close()
 			fmt.Printf("❌ Error loading config file: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Printf("✓ Configuration loaded from %s\n", configPath)
 	}
@@ -59,8 +61,10 @@ func main() {
 
 	if err := ui.RunConsole(); err != nil {
 		fmt.Printf("❌ Console error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+
+	return 0
 }
 
 // handleResumeSession handles the --resume flag functionality

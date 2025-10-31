@@ -106,10 +106,10 @@ func LoadFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
-	
+
 	return yaml.Unmarshal(data, &currentState)
 }
 
@@ -117,7 +117,7 @@ func LoadFromFile(path string) error {
 func LoadFromSession(session types.SavedSession) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
-	
+
 	currentState.ProjectID = session.ProjectID
 	currentState.APIKey = session.APIKey
 	currentState.Email = session.Email

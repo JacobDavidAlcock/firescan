@@ -172,7 +172,7 @@ func HandleAuth(args []string) {
 			fmt.Printf("⚠️  Warning: Could not check verification status: %v\n", err)
 			currentVerified = emailVerified // Fall back to signup response
 		}
-		
+
 		if !currentVerified {
 			fmt.Printf("[*] Sending email verification to %s...\n", authEmail)
 			err = auth.SendEmailVerification(token, apiKey)
@@ -184,7 +184,7 @@ func HandleAuth(args []string) {
 		} else {
 			fmt.Printf("%s✓ Email %s is already verified%s\n", types.ColorGreen, authEmail, types.ColorReset)
 		}
-		
+
 		// Update state with current verification status
 		config.SetAuthInfo(authEmail, authPassword, userID, currentVerified)
 	}
@@ -202,12 +202,12 @@ func HandleScan(args []string) {
 	storageTest := scanFlags.Bool("storage", false, "Enable Cloud Storage enumeration.")
 	functionsTest := scanFlags.Bool("functions", false, "Enable Cloud Functions enumeration.")
 	hostingTest := scanFlags.Bool("hosting", false, "Check for public firebase.json config file.")
-	
+
 	// New safety mode flags
 	probeMode := scanFlags.Bool("probe", false, "Explicit probe mode (default, safe read-only).")
 	testMode := scanFlags.Bool("test", false, "Test mode with safe write operations and cleanup.")
 	auditMode := scanFlags.Bool("audit", false, "Audit mode with deep testing (requires confirmation).")
-	
+
 	// New feature flags
 	rulesTest := scanFlags.Bool("rules", false, "Enable security rules testing.")
 	writeTest := scanFlags.Bool("write", false, "Enable write access testing (requires test mode).")
@@ -219,7 +219,7 @@ func HandleScan(args []string) {
 	managementTest := scanFlags.Bool("mgmt-api", false, "Enable Firebase Management API security testing.")
 	rtdbAdvancedTest := scanFlags.Bool("rtdb-advanced", false, "Enable RTDB advanced rule context testing.")
 	fcmTest := scanFlags.Bool("fcm", false, "Enable FCM & Push Notification security testing.")
-	
+
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
 	rateLimit := scanFlags.Int("rate-limit", 0, "Rate limit in requests/second (0=unlimited, recommended: 10-50).")
@@ -240,7 +240,7 @@ func HandleScan(args []string) {
 	// Determine scan mode
 	var scanMode types.ScanMode = types.ProbeMode // Default to probe mode
 	modeCount := 0
-	
+
 	if *probeMode {
 		scanMode = types.ProbeMode
 		modeCount++
@@ -253,13 +253,13 @@ func HandleScan(args []string) {
 		scanMode = types.AuditMode
 		modeCount++
 	}
-	
+
 	// Validate only one mode is specified
 	if modeCount > 1 {
 		fmt.Println("❌ Error: Only one scan mode can be specified (--probe, --test, or --audit).")
 		return
 	}
-	
+
 	// Validate write test requires test mode or higher
 	if *writeTest && scanMode < types.TestMode {
 		fmt.Println("❌ Error: --write flag requires --test or --audit mode.")
@@ -289,14 +289,14 @@ func HandleScan(args []string) {
 	// Check if any scan type is specified
 	hasTraditionalScans := *rtdbTest || *firestoreTest || *storageTest || *functionsTest || *hostingTest
 	hasNewScans := *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *unauthTest || *storageSecTest || *managementTest || *rtdbAdvancedTest || *fcmTest
-	
+
 	if !hasTraditionalScans && !hasNewScans {
 		fmt.Println("❌ Error: No scan type specified. Use flags like --rtdb, --firestore, --rules, --services, --all, etc.")
 		return
 	}
 
 	state := config.GetState()
-	
+
 	// For unauthenticated testing, only projectID is required
 	if *unauthTest {
 		if state.ProjectID == "" {
@@ -348,7 +348,7 @@ func HandleScan(args []string) {
 	// Run new security tests
 	totalFindings := 0
 	totalFindings += len(traditionalFindings)
-	
+
 	// Rules testing
 	if *rulesTest {
 		services := []string{}
@@ -358,7 +358,7 @@ func HandleScan(args []string) {
 		if *firestoreTest || *allScan {
 			services = append(services, "firestore")
 		}
-		
+
 		fmt.Printf("\n%s[*] Running Security Rules Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
 		ruleResults, err := runRulesTest(scanMode, services)
 		if err != nil {
@@ -370,7 +370,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// Write access testing
 	if *writeTest {
 		services := []string{}
@@ -383,7 +383,7 @@ func HandleScan(args []string) {
 		if *storageTest || *allScan {
 			services = append(services, "storage")
 		}
-		
+
 		fmt.Printf("\n%s[*] Running Write Access Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
 		writeResults, err := runWriteTest(scanMode, services)
 		if err != nil {
@@ -395,7 +395,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// Services enumeration
 	if *servicesTest {
 		fmt.Printf("\n%s[*] Running Firebase Services Enumeration (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
@@ -413,7 +413,7 @@ func HandleScan(args []string) {
 	if *jsonOutput {
 		PrintJSON(traditionalFindings)
 	}
-	
+
 	// App Check testing
 	if *appCheckTest {
 		fmt.Printf("\n%s[*] Running Firebase App Check Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
@@ -427,7 +427,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// Advanced authentication attacks
 	if *authAttackTest {
 		if scanMode < types.TestMode {
@@ -445,7 +445,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// Unauthenticated access testing
 	if *unauthTest {
 		fmt.Printf("\n%s[*] Running Unauthenticated Access Testing%s\n", types.ColorCyan, types.ColorReset)
@@ -458,7 +458,7 @@ func HandleScan(args []string) {
 			totalFindings += unauthFindingsCount
 		}
 	}
-	
+
 	// Storage Security Deep Testing
 	if *storageSecTest {
 		fmt.Printf("\n%s[*] Running Firebase Storage Deep Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
@@ -474,7 +474,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// Firebase Management API Security Testing
 	if *managementTest {
 		fmt.Printf("\n%s[*] Running Firebase Management API Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
@@ -490,7 +490,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// RTDB Advanced Rule Context Testing
 	if *rtdbAdvancedTest {
 		fmt.Printf("\n%s[*] Running RTDB Advanced Rule Context Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
@@ -506,7 +506,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	// FCM & Push Notification Security Testing
 	if *fcmTest {
 		fmt.Printf("\n%s[*] Running FCM & Push Notification Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
@@ -522,7 +522,7 @@ func HandleScan(args []string) {
 			}
 		}
 	}
-	
+
 	fmt.Printf("\n\n✅ Scan complete. Found %d total findings.\n", totalFindings)
 }
 
@@ -544,11 +544,11 @@ func runServicesTest(mode types.ScanMode, serviceList []string) ([]types.Service
 // printRuleResults displays security rules test results
 func printRuleResults(results []types.RuleTestResult) {
 	fmt.Printf("\n%s=== Security Rules Test Results ===%s\n", types.ColorCyan, types.ColorReset)
-	
+
 	for _, result := range results {
 		status := "✓"
 		statusColor := types.ColorGreen
-		
+
 		if result.Error != nil {
 			status = "✗"
 			statusColor = types.ColorRed
@@ -556,17 +556,17 @@ func printRuleResults(results []types.RuleTestResult) {
 			status = "⚠"
 			statusColor = types.ColorYellow
 		}
-		
+
 		fmt.Printf("%s%s %s%s\n", statusColor, status, result.TestCase.ID, types.ColorReset)
 		fmt.Printf("  Description: %s\n", result.TestCase.Description)
 		fmt.Printf("  Path: %s\n", result.TestCase.Path)
 		fmt.Printf("  Operation: %s\n", result.TestCase.Operation)
 		fmt.Printf("  Expected: %v, Actual: %v\n", result.TestCase.Expected, result.Actual)
-		
+
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
-		
+
 		fmt.Printf("  Duration: %v\n", result.Duration)
 		fmt.Println()
 	}
@@ -575,11 +575,11 @@ func printRuleResults(results []types.RuleTestResult) {
 // printWriteResults displays write access test results
 func printWriteResults(results []types.WriteTestResult) {
 	fmt.Printf("\n%s=== Write Access Test Results ===%s\n", types.ColorCyan, types.ColorReset)
-	
+
 	for _, result := range results {
 		status := "✓"
 		statusColor := types.ColorGreen
-		
+
 		if result.Error != nil {
 			status = "✗"
 			statusColor = types.ColorRed
@@ -587,22 +587,22 @@ func printWriteResults(results []types.WriteTestResult) {
 			status = "⚠"
 			statusColor = types.ColorYellow
 		}
-		
+
 		fmt.Printf("%s%s %s%s\n", statusColor, status, result.TestCase.ID, types.ColorReset)
 		fmt.Printf("  Description: %s\n", result.TestCase.Description)
 		fmt.Printf("  Service: %s\n", result.TestCase.Service)
 		fmt.Printf("  Path: %s\n", result.TestCase.Path)
 		fmt.Printf("  Operation: %s\n", result.TestCase.Operation)
 		fmt.Printf("  Success: %v\n", result.Success)
-		
+
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
-		
+
 		if result.Response != nil {
 			fmt.Printf("  Response: %v\n", result.Response)
 		}
-		
+
 		fmt.Printf("  Duration: %v\n", result.Duration)
 		fmt.Println()
 	}
@@ -611,11 +611,11 @@ func printWriteResults(results []types.WriteTestResult) {
 // printServiceResults displays Firebase services enumeration results
 func printServiceResults(results []types.ServiceEnumResult) {
 	fmt.Printf("\n%s=== Firebase Services Enumeration Results ===%s\n", types.ColorCyan, types.ColorReset)
-	
+
 	for _, result := range results {
 		status := "✓"
 		statusColor := types.ColorGreen
-		
+
 		if result.Error != nil {
 			status = "✗"
 			statusColor = types.ColorRed
@@ -623,21 +623,21 @@ func printServiceResults(results []types.ServiceEnumResult) {
 			status = "⚠"
 			statusColor = types.ColorYellow
 		}
-		
+
 		fmt.Printf("%s%s %s%s\n", statusColor, status, result.Service, types.ColorReset)
 		fmt.Printf("  Endpoint: %s\n", result.Endpoint)
 		fmt.Printf("  Accessible: %v\n", result.Accessible)
 		fmt.Printf("  Has Data: %v\n", result.HasData)
 		fmt.Printf("  Safety Level: %s\n", result.SafetyLevel.String())
-		
+
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
-		
+
 		if result.DataSample != nil {
 			fmt.Printf("  Sample Data: %v\n", result.DataSample)
 		}
-		
+
 		fmt.Println()
 	}
 }
@@ -726,21 +726,21 @@ func HandleExtract(args []string) {
 // formatFirestoreCollectionOutput formats Firestore documents with clear document IDs
 func formatFirestoreCollectionOutput(data interface{}) (string, error) {
 	var result strings.Builder
-	
+
 	// Convert interface{} to slice of documents
 	documents, ok := data.([]interface{})
 	if !ok {
 		return "", fmt.Errorf("unexpected data format for Firestore collection")
 	}
-	
+
 	result.WriteString(fmt.Sprintf("{\n  \"documents\": [\n"))
-	
+
 	for i, doc := range documents {
 		docMap, ok := doc.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		
+
 		// Extract document ID from the name field
 		var documentId string
 		if nameField, exists := docMap["name"]; exists {
@@ -751,16 +751,16 @@ func formatFirestoreCollectionOutput(data interface{}) (string, error) {
 				documentId = parts[len(parts)-1]
 			}
 		}
-		
+
 		result.WriteString(fmt.Sprintf("    {\n"))
 		result.WriteString(fmt.Sprintf("      \"DOCUMENT_ID\": \"%s\",\n", documentId))
-		
+
 		// Add the rest of the document data
 		docJSON, err := json.MarshalIndent(docMap, "      ", "  ")
 		if err != nil {
 			continue
 		}
-		
+
 		// Remove the outer braces and add proper indentation
 		docStr := string(docJSON)
 		docStr = strings.TrimSpace(docStr)
@@ -771,16 +771,16 @@ func formatFirestoreCollectionOutput(data interface{}) (string, error) {
 		if docStr != "" {
 			result.WriteString(fmt.Sprintf("      %s\n", strings.ReplaceAll(docStr, "\n", "\n      ")))
 		}
-		
+
 		if i < len(documents)-1 {
 			result.WriteString("    },\n")
 		} else {
 			result.WriteString("    }\n")
 		}
 	}
-	
+
 	result.WriteString("  ]\n}")
-	
+
 	return result.String(), nil
 }
 
@@ -920,20 +920,20 @@ apiKey: ""
 // HandleSaveQuit handles the 'save-quit' command
 func HandleSaveQuit() {
 	state := config.GetState()
-	
+
 	if state.ProjectID == "" || state.APIKey == "" {
 		fmt.Println("⚠️  Warning: No configuration to save (projectID and apiKey required).")
 		return
 	}
-	
+
 	sessionName := config.PromptForSessionName(fmt.Sprintf("%s-%d", state.ProjectID, time.Now().Unix()))
-	
+
 	err := config.SaveSession(sessionName)
 	if err != nil {
 		fmt.Printf("❌ Error saving session: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("%s✓ Session '%s' saved successfully.%s\n", types.ColorGreen, sessionName, types.ColorReset)
 }
 
@@ -952,12 +952,12 @@ func HandleEnumerateAuthProviders() {
 func HandleAuthStatus() {
 	email, _, userID, emailVerified := config.GetAuthInfo()
 	token := config.GetToken()
-	
+
 	if token == "" {
 		fmt.Println("❌ No active authentication session. Please authenticate first using 'auth --create-account' or 'auth -e <email> -P <password>'.")
 		return
 	}
-	
+
 	fmt.Println("\n--- Authentication Status ---")
 	fmt.Printf("  Email         : %s\n", email)
 	fmt.Printf("  User ID       : %s\n", userID)
@@ -974,27 +974,27 @@ func HandleAuthStatus() {
 func HandleAuthRefresh() {
 	email, password, _, _ := config.GetAuthInfo()
 	apiKey := config.GetAPIKey()
-	
+
 	if email == "" || password == "" {
 		fmt.Println("❌ Error: No stored credentials available for refresh. Please authenticate first.")
 		return
 	}
-	
+
 	if apiKey == "" {
 		fmt.Println("❌ Error: apiKey must be set before refreshing token.")
 		return
 	}
-	
+
 	fmt.Printf("[*] Refreshing authentication token for %s...\n", email)
-	
+
 	newToken, userID, emailVerified, err := auth.SignIn(email, password, apiKey)
 	if err != nil {
 		fmt.Printf("❌ Token refresh failed: %v\n", err)
 		return
 	}
-	
+
 	config.SetAuthInfo(email, password, userID, emailVerified)
 	config.SetToken(newToken)
-	
+
 	fmt.Printf("%s✓ Token refreshed successfully.%s\n", types.ColorGreen, types.ColorReset)
 }

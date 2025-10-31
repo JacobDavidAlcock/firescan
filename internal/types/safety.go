@@ -38,11 +38,11 @@ type SafetyConfig struct {
 
 // TestCleanup manages cleanup of test data
 type TestCleanup struct {
-	TestPaths     []string
-	TestFiles     []string
-	CreatedAt     time.Time
-	ProjectID     string
-	CleanupFuncs  []func() error
+	TestPaths    []string
+	TestFiles    []string
+	CreatedAt    time.Time
+	ProjectID    string
+	CleanupFuncs []func() error
 }
 
 // RuleTestCase represents a security rule test case

@@ -24,7 +24,7 @@ func DefaultSafetyConfig() types.SafetyConfig {
 // ValidateScanMode checks if the requested scan mode is safe for the operation
 func ValidateScanMode(requested types.ScanMode, required types.ScanMode) error {
 	if requested < required {
-		return fmt.Errorf("operation requires %s mode or higher, but %s mode requested", 
+		return fmt.Errorf("operation requires %s mode or higher, but %s mode requested",
 			required.String(), requested.String())
 	}
 	return nil
@@ -77,14 +77,14 @@ func AddCleanupFunc(tc *types.TestCleanup, fn func() error) {
 // PerformCleanup performs all registered cleanup operations
 func PerformCleanup(tc *types.TestCleanup) error {
 	var errors []string
-	
+
 	// Run custom cleanup functions
 	for _, fn := range tc.CleanupFuncs {
 		if err := fn(); err != nil {
 			errors = append(errors, err.Error())
 		}
 	}
-	
+
 	// Note: Actual cleanup implementation would go here
 	// For now, we log what would be cleaned up
 	if len(tc.TestPaths) > 0 {
@@ -93,11 +93,11 @@ func PerformCleanup(tc *types.TestCleanup) error {
 	if len(tc.TestFiles) > 0 {
 		fmt.Printf("[*] Would cleanup test files: %v\n", tc.TestFiles)
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("cleanup errors: %s", strings.Join(errors, "; "))
 	}
-	
+
 	return nil
 }
 
@@ -126,7 +126,7 @@ func warnTestMode() bool {
 	fmt.Println("  • May trigger security monitoring alerts")
 	fmt.Println("  • All test data will be automatically cleaned up")
 	fmt.Println("  • No existing user data will be modified")
-	
+
 	return promptYesNo("\nContinue with test mode?")
 }
 
@@ -139,11 +139,11 @@ func warnAuditMode() bool {
 	fmt.Println("  • Comprehensive permission mapping")
 	fmt.Println("  • May generate significant security logs")
 	fmt.Println("  • Extensive API calls to Firebase services")
-	
+
 	fmt.Print("\nType 'I UNDERSTAND THE RISKS' to continue: ")
 	var input string
 	fmt.Scanln(&input)
-	
+
 	return input == "I UNDERSTAND THE RISKS"
 }
 
@@ -152,7 +152,7 @@ func promptYesNo(message string) bool {
 	fmt.Print(message + " (y/N): ")
 	var input string
 	fmt.Scanln(&input)
-	
+
 	input = strings.ToLower(strings.TrimSpace(input))
 	return input == "y" || input == "yes"
 }
@@ -161,11 +161,11 @@ func promptYesNo(message string) bool {
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	result := make([]byte, length)
-	
+
 	for i := range result {
 		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
 		result[i] = charset[num.Int64()]
 	}
-	
+
 	return string(result)
 }

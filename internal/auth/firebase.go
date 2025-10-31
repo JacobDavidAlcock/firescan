@@ -85,15 +85,15 @@ func executeAuthRequestWithUserInfo(url string, payload map[string]string) (stri
 		}
 		return "", "", false, fmt.Errorf("unexpected auth API error (HTTP %d)", resp.StatusCode)
 	}
-	
+
 	idToken, hasToken := result["idToken"].(string)
 	if !hasToken {
 		return "", "", false, fmt.Errorf("could not find idToken in auth response")
 	}
-	
+
 	userID, _ := result["localId"].(string)
 	emailVerified, _ := result["emailVerified"].(bool)
-	
+
 	return idToken, userID, emailVerified, nil
 }
 
@@ -121,12 +121,12 @@ func MakeAuthenticatedRequest(method, url, token, email, password, apiKey string
 				return resp, fmt.Errorf("token refresh failed: %v", err)
 			}
 			fmt.Println("✓ Token refreshed successfully.")
-			
+
 			// Update token via callback
 			if updateTokenFunc != nil {
 				updateTokenFunc(newToken, userID, emailVerified)
 			}
-			
+
 			req.Header.Set("Authorization", "Bearer "+newToken)
 			return httpclient.Do(req)
 		}
@@ -141,7 +141,7 @@ func CheckEmailVerificationStatus(idToken, apiKey string) (bool, error) {
 	payload := map[string]string{
 		"idToken": idToken,
 	}
-	
+
 	jsonPayload, _ := json.Marshal(payload)
 	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
 	if resp != nil {
@@ -159,10 +159,10 @@ func CheckEmailVerificationStatus(idToken, apiKey string) (bool, error) {
 		}
 		return false, fmt.Errorf("unexpected user lookup API error (HTTP %d)", resp.StatusCode)
 	}
-	
+
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
-	
+
 	if users, ok := result["users"].([]interface{}); ok && len(users) > 0 {
 		if user, ok := users[0].(map[string]interface{}); ok {
 			if emailVerified, ok := user["emailVerified"].(bool); ok {
@@ -170,7 +170,7 @@ func CheckEmailVerificationStatus(idToken, apiKey string) (bool, error) {
 			}
 		}
 	}
-	
+
 	return false, nil
 }
 
@@ -181,7 +181,7 @@ func SendEmailVerification(idToken, apiKey string) error {
 		"requestType": "VERIFY_EMAIL",
 		"idToken":     idToken,
 	}
-	
+
 	jsonPayload, _ := json.Marshal(payload)
 	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
 	if resp != nil {
@@ -210,17 +210,17 @@ func EnumerateAuthProviders(apiKey string) map[string]bool {
 	results := make(map[string]bool)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	
+
 	for _, provider := range providers {
 		wg.Add(1)
 		go func(p string) {
 			defer wg.Done()
 			enabled := probeAuthProvider(p, apiKey)
-			
+
 			mu.Lock()
 			results[p] = enabled
 			mu.Unlock()
-			
+
 			status := "Disabled"
 			if enabled {
 				status = "Enabled"
@@ -229,7 +229,7 @@ func EnumerateAuthProviders(apiKey string) map[string]bool {
 		}(provider)
 	}
 	wg.Wait()
-	
+
 	return results
 }
 
@@ -313,13 +313,13 @@ func MakeAuthenticatedRequestWithBody(method, url, body, token, email, password,
 	// Check if token is expired and attempt refresh if needed
 	if resp.StatusCode == 401 && updateTokenFunc != nil {
 		resp.Body.Close()
-		
+
 		// Attempt token refresh
 		if email != "" && password != "" {
 			newToken, userID, emailVerified, err := SignIn(email, password, apiKey)
 			if err == nil {
 				updateTokenFunc(newToken, userID, emailVerified)
-				
+
 				// Retry with new token
 				if body != "" {
 					bodyReader = strings.NewReader(body)
@@ -328,12 +328,12 @@ func MakeAuthenticatedRequestWithBody(method, url, body, token, email, password,
 				if err != nil {
 					return nil, fmt.Errorf("failed to create retry request: %v", err)
 				}
-				
+
 				newReq.Header.Set("Authorization", "Bearer "+newToken)
 				if body != "" {
 					newReq.Header.Set("Content-Type", "application/json")
 				}
-				
+
 				resp, err = client.Do(newReq)
 				if err != nil {
 					return nil, fmt.Errorf("retry request failed: %v", err)

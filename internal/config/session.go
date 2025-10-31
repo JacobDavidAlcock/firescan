@@ -17,11 +17,11 @@ var sessionsFilePath = "firescan_sessions.yaml"
 // SaveSession saves the current session
 func SaveSession(sessionName string) error {
 	state := GetState()
-	
+
 	if state.ProjectID == "" || state.APIKey == "" {
 		return fmt.Errorf("no configuration to save (projectID and apiKey required)")
 	}
-	
+
 	session := types.SavedSession{
 		Name:      sessionName,
 		ProjectID: state.ProjectID,
@@ -30,7 +30,7 @@ func SaveSession(sessionName string) error {
 		Password:  state.Password,
 		SavedAt:   time.Now(),
 	}
-	
+
 	return saveSessionToFile(session)
 }
 
@@ -41,7 +41,7 @@ func saveSessionToFile(session types.SavedSession) error {
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to load existing sessions: %v", err)
 	}
-	
+
 	// Remove any existing session with the same name
 	var filteredSessions []types.SavedSession
 	for _, s := range sessions.Sessions {
@@ -49,28 +49,28 @@ func saveSessionToFile(session types.SavedSession) error {
 			filteredSessions = append(filteredSessions, s)
 		}
 	}
-	
+
 	// Add the new session
 	filteredSessions = append(filteredSessions, session)
-	
+
 	// Keep only the last 10 sessions
 	if len(filteredSessions) > 10 {
 		filteredSessions = filteredSessions[len(filteredSessions)-10:]
 	}
-	
+
 	sessions.Sessions = filteredSessions
-	
+
 	// Save to file
 	data, err := yaml.Marshal(sessions)
 	if err != nil {
 		return fmt.Errorf("failed to marshal sessions: %v", err)
 	}
-	
+
 	err = os.WriteFile(sessionsFilePath, data, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write sessions file: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -80,13 +80,13 @@ func loadSavedSessions() (*types.SessionsFile, error) {
 	if err != nil {
 		return &types.SessionsFile{Sessions: []types.SavedSession{}}, err
 	}
-	
+
 	var sessions types.SessionsFile
 	err = yaml.Unmarshal(data, &sessions)
 	if err != nil {
 		return &types.SessionsFile{Sessions: []types.SavedSession{}}, err
 	}
-	
+
 	return &sessions, nil
 }
 
@@ -99,46 +99,46 @@ func ResumeSession() error {
 		}
 		return fmt.Errorf("failed to load sessions: %v", err)
 	}
-	
+
 	if len(sessions.Sessions) == 0 {
 		return fmt.Errorf("no saved sessions available")
 	}
-	
+
 	fmt.Println("\n--- Available Sessions ---")
 	for i, session := range sessions.Sessions {
-		fmt.Printf("%d. %s (Project: %s, Email: %s, Saved: %s)\n", 
-			i+1, session.Name, session.ProjectID, 
-			MaskString(session.Email, 2, 0), 
+		fmt.Printf("%d. %s (Project: %s, Email: %s, Saved: %s)\n",
+			i+1, session.Name, session.ProjectID,
+			MaskString(session.Email, 2, 0),
 			session.SavedAt.Format("2006-01-02 15:04"))
 	}
 	fmt.Println("--------------------------")
-	
+
 	fmt.Print("Select session number (1-" + fmt.Sprintf("%d", len(sessions.Sessions)) + "): ")
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	var selection int
 	_, err = fmt.Sscanf(input, "%d", &selection)
 	if err != nil || selection < 1 || selection > len(sessions.Sessions) {
 		return fmt.Errorf("invalid selection")
 	}
-	
+
 	selectedSession := sessions.Sessions[selection-1]
-	
+
 	// Load the session into current state
 	LoadFromSession(selectedSession)
-	
+
 	// Try to authenticate with stored credentials if available
 	if selectedSession.Email != "" && selectedSession.Password != "" {
 		fmt.Printf("[*] Attempting to authenticate with stored credentials for %s...\n", selectedSession.Email)
-		
+
 		// Import auth package functions
 		// Note: This will be handled in the main application
 		fmt.Printf("✓ Session '%s' loaded. You may need to authenticate manually.\n", selectedSession.Name)
 		return nil
 	}
-	
+
 	fmt.Printf("✓ Session '%s' loaded. ProjectID and API Key have been set.\n", selectedSession.Name)
 	return nil
 }
@@ -149,10 +149,10 @@ func PromptForSessionName(defaultName string) string {
 	reader := bufio.NewReader(os.Stdin)
 	sessionName, _ := reader.ReadString('\n')
 	sessionName = strings.TrimSpace(sessionName)
-	
+
 	if sessionName == "" {
 		sessionName = defaultName
 	}
-	
+
 	return sessionName
 }

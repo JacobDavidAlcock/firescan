@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -131,7 +132,11 @@ func testAlgorithmConfusion(state types.State, mode types.ScanMode) AttackResult
 	// Test the malicious token against Firebase services
 	testURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/.json", state.ProjectID)
 
-	req, _ := http.NewRequest("GET", testURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", testURL, nil)
+	if err != nil {
+		result.Error = err
+		return result
+	}
 	req.Header.Set("Authorization", "Bearer "+maliciousJWT)
 
 	resp, err := httpclient.Do(req)
@@ -158,6 +163,9 @@ func testCustomClaimsInjection(state types.State, mode types.ScanMode) AttackRes
 		Details:     make(map[string]interface{}),
 	}
 
+	// Add project context to result
+	result.Details["project_id"] = state.ProjectID
+
 	// Test various dangerous custom claims
 	dangerousClaims := []map[string]interface{}{
 		{"admin": true, "role": "super_admin"},
@@ -182,21 +190,16 @@ func testTokenExpirationBypass(state types.State, mode types.ScanMode) AttackRes
 		Details:     make(map[string]interface{}),
 	}
 
+	// Add project context
+	result.Details["project_id"] = state.ProjectID
+
 	// Test 1: Expired token usage
-	expiredPayload := JWTPayload{
-		Iss:      fmt.Sprintf("https://securetoken.google.com/%s", state.ProjectID),
-		Aud:      state.ProjectID,
-		AuthTime: time.Now().Add(-2 * time.Hour).Unix(),
-		UserID:   "expired-user",
-		Sub:      "expired-user",
-		Iat:      time.Now().Add(-2 * time.Hour).Unix(),
-		Exp:      time.Now().Add(-time.Hour).Unix(), // Expired 1 hour ago
-	}
+	expiredTime := time.Now().Add(-time.Hour).Unix() // Expired 1 hour ago
 
 	// Test 2: Far future expiration
 	futureExp := time.Now().Add(365 * 24 * time.Hour).Unix() // 1 year in future
 
-	result.Details["expired_token_test"] = expiredPayload.Exp
+	result.Details["expired_token_test"] = expiredTime
 	result.Details["future_token_test"] = futureExp
 	result.Details["attack_description"] = "Tests if expired tokens are properly validated"
 
@@ -210,6 +213,9 @@ func testSignatureBypass(state types.State, mode types.ScanMode) AttackResult {
 		SafetyLevel: mode,
 		Details:     make(map[string]interface{}),
 	}
+
+	// Add project context
+	result.Details["project_id"] = state.ProjectID
 
 	// Test techniques:
 	// 1. None algorithm
@@ -270,7 +276,7 @@ func testServiceAccountEnumeration(state types.State) []AttackResult {
 	commonSAs := []string{
 		fmt.Sprintf("firebase-adminsdk-@%s.iam.gserviceaccount.com", state.ProjectID),
 		fmt.Sprintf("service-account@%s.iam.gserviceaccount.com", state.ProjectID),
-		fmt.Sprintf("compute@developer.gserviceaccount.com"),
+		"compute@developer.gserviceaccount.com",
 		fmt.Sprintf("app-engine@%s.iam.gserviceaccount.com", state.ProjectID),
 	}
 

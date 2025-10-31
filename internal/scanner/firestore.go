@@ -107,7 +107,7 @@ func WriteFirestoreDocument(path, documentId string, data map[string]interface{}
 
 	// Convert data to Firestore format
 	firestoreData := convertToFirestoreFormat(data)
-	
+
 	jsonData, err := json.Marshal(map[string]interface{}{
 		"fields": firestoreData,
 	})
@@ -126,14 +126,14 @@ func WriteFirestoreDocument(path, documentId string, data map[string]interface{}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("failed to write document (HTTP %d)", resp.StatusCode)
 	}
-	
+
 	return nil
 }
 
 // convertToFirestoreFormat converts regular JSON to Firestore field format
 func convertToFirestoreFormat(data map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	for key, value := range data {
 		switch v := value.(type) {
 		case string:
@@ -186,6 +186,6 @@ func convertToFirestoreFormat(data map[string]interface{}) map[string]interface{
 			}
 		}
 	}
-	
+
 	return result
 }

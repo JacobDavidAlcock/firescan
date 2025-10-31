@@ -16,16 +16,16 @@ import (
 
 // RTDBAdvancedResult represents RTDB advanced security test results
 type RTDBAdvancedResult struct {
-	TestType        string
-	TestCase        string
-	Path            string
-	Vulnerability   string
-	Severity        string
-	Finding         string
-	Details         map[string]interface{}
-	SafetyLevel     types.ScanMode
-	Error           error
-	AuthRequired    bool
+	TestType      string
+	TestCase      string
+	Path          string
+	Vulnerability string
+	Severity      string
+	Finding       string
+	Details       map[string]interface{}
+	SafetyLevel   types.ScanMode
+	Error         error
+	AuthRequired  bool
 }
 
 // TestRTDBAdvancedSecurity performs comprehensive RTDB advanced security testing
@@ -110,7 +110,7 @@ func testRulePrecedenceConflicts(state types.State, mode types.ScanMode) []RTDBA
 
 	for _, testCase := range testCases {
 		status.ShowStatus(fmt.Sprintf("Testing RTDB rule precedence: %s", testCase.description))
-		
+
 		result := RTDBAdvancedResult{
 			TestType:     "Rule Precedence",
 			TestCase:     testCase.description,
@@ -393,8 +393,8 @@ type RTDBAccessResult struct {
 
 type ValidationAnalysis struct {
 	HasValidationBypass bool
-	BypassType         string
-	RuleStructure      map[string]interface{}
+	BypassType          string
+	RuleStructure       map[string]interface{}
 }
 
 type IndexingBypassResult struct {
@@ -404,9 +404,9 @@ type IndexingBypassResult struct {
 }
 
 type DeltaSyncTest struct {
-	HasBypass   bool
-	ListenerOk  bool
-	SyncIssues  []string
+	HasBypass  bool
+	ListenerOk bool
+	SyncIssues []string
 }
 
 // testRTDBAccess tests access to an RTDB path
@@ -453,7 +453,7 @@ func analyzeRulePrecedenceVulnerability(parentAccess, childAccess RTDBAccessResu
 	if parentAccess.Accessible != childAccess.Accessible {
 		return true
 	}
-	
+
 	// If both accessible but different data patterns
 	if parentAccess.Accessible && childAccess.Accessible {
 		if parentAccess.HasData != childAccess.HasData {
@@ -472,7 +472,7 @@ func analyzeValidationRules(path string, state types.State, requireAuth bool) Va
 
 	// Try to access rules endpoint to analyze structure
 	rulesURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/.settings/rules.json", state.ProjectID)
-	
+
 	var resp *http.Response
 	var err error
 
@@ -487,7 +487,7 @@ func analyzeValidationRules(path string, state types.State, requireAuth bool) Va
 		var rules map[string]interface{}
 		if json.NewDecoder(resp.Body).Decode(&rules) == nil {
 			analysis.RuleStructure = rules
-			
+
 			// Analyze for common validation bypass patterns
 			if ruleStr, ok := rules["rules"].(string); ok {
 				if strings.Contains(ruleStr, ".validate") && !strings.Contains(ruleStr, ".write") {
@@ -507,7 +507,7 @@ func testIndexingBypass(path, technique string, state types.State, requireAuth b
 
 	// Test different query patterns that might bypass indexing rules
 	queryURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com%s.json?orderBy=\"$key\"&limitToFirst=1", state.ProjectID, path)
-	
+
 	var resp *http.Response
 	var err error
 
@@ -534,7 +534,7 @@ func testDeltaSyncBypass(path string, state types.State, requireAuth bool) Delta
 
 	// Test basic listener endpoint
 	listenerURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com%s.json?print=silent", state.ProjectID, path)
-	
+
 	var resp *http.Response
 	var err error
 
@@ -547,7 +547,7 @@ func testDeltaSyncBypass(path string, state types.State, requireAuth bool) Delta
 	if err == nil {
 		defer resp.Body.Close()
 		result.ListenerOk = (resp.StatusCode == 200)
-		
+
 		// If listener works but should be restricted, it's a bypass
 		if result.ListenerOk && strings.Contains(path, "private") {
 			result.HasBypass = true
@@ -566,15 +566,15 @@ func showRTDBFinding(result RTDBAdvancedResult) {
 
 	// Clear any status message before showing finding
 	status.ClearStatus()
-	
+
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	// Determine color based on severity
 	severityColor := types.ColorCyan
 	switch result.Severity {
 	case "High":
 		severityColor = types.ColorRed
-	case "Medium":  
+	case "Medium":
 		severityColor = types.ColorYellow
 	case "Low":
 		severityColor = types.ColorGreen
@@ -586,6 +586,6 @@ func showRTDBFinding(result RTDBAdvancedResult) {
 		severityColor, result.Severity, types.ColorReset,
 		result.TestType,
 		result.Path)
-		
+
 	fmt.Printf("  └── Details:   %s\n", result.Finding)
 }

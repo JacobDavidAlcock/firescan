@@ -37,7 +37,7 @@ func TestUnauthenticated(mode types.ScanMode) ([]UnauthTestResult, error) {
 
 	// Determine what credentials we have available
 	hasAPIKey := state.APIKey != ""
-	
+
 	// Test RTDB access (works with projectID only)
 	rtdbResults := testRTDBUnauth(state, hasAPIKey)
 	results = append(results, rtdbResults...)
@@ -100,31 +100,31 @@ func TestUnauthenticated(mode types.ScanMode) ([]UnauthTestResult, error) {
 func showUnauthFinding(result UnauthTestResult) {
 	// Clear any status message before showing finding
 	status.ClearStatus()
-	
+
 	// Determine severity and type
 	severity := "Medium"
 	findingType := "Public Access"
-	
+
 	if result.HasData {
 		severity = "High"
 		findingType = "Data Exposure"
 	}
-	
+
 	// Use same format as normal scanner
 	severityColor := types.ColorYellow
 	if severity == "High" {
 		severityColor = types.ColorRed
 	}
-	
+
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	fmt.Printf("\n[%s%s%s] %s%sVulnerability Found!%s\n  ├── Timestamp: %s\n  ├── Severity:  %s%s%s\n  ├── Type:      %s\n  └── Path:      %s\n",
 		types.ColorRed, types.ColorBold, result.Service, types.ColorGreen, types.ColorBold, types.ColorReset,
 		timestamp,
 		severityColor, severity, types.ColorReset,
 		findingType,
 		result.Endpoint)
-		
+
 	if result.HasData && result.DataSample != nil {
 		fmt.Printf("  └── Data:      %v\n", result.DataSample)
 	}
@@ -133,7 +133,7 @@ func showUnauthFinding(result UnauthTestResult) {
 // testRTDBUnauth tests RTDB without authentication
 func testRTDBUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 	var results []UnauthTestResult
-	
+
 	endpoints := []struct {
 		path        string
 		description string
@@ -158,12 +158,12 @@ func testRTDBUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 		if hasAPIKey {
 			result.Description += " (with API key)"
 		}
-		
+
 		// Show finding immediately if it's a security issue
 		if result.HasData || result.Accessible {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -189,7 +189,7 @@ func testFirestoreUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 	}
 
 	baseURL := fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)", state.ProjectID)
-	
+
 	for _, endpoint := range endpoints {
 		var url string
 		if hasAPIKey {
@@ -197,31 +197,31 @@ func testFirestoreUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 		} else {
 			url = baseURL + "/" + endpoint.path
 		}
-		
+
 		result := makeUnauthenticatedRequest("Firestore", url, "GET", endpoint.description)
 		if hasAPIKey {
 			result.Description += " (with API key)"
 		}
-		
+
 		// Show finding immediately if it's a security issue
 		if result.HasData || result.Accessible {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
-		
+
 		// Also test POST for query endpoints (works better with API key)
 		if endpoint.path == ":runQuery" || endpoint.path == ":batchGet" {
 			postResult := makeUnauthenticatedRequest("Firestore", url, "POST", endpoint.description+" (POST)")
 			if hasAPIKey {
 				postResult.Description += " (with API key)"
 			}
-			
+
 			// Show finding immediately if it's a security issue
 			if postResult.HasData || postResult.Accessible {
 				showUnauthFinding(postResult)
 			}
-			
+
 			results = append(results, postResult)
 		}
 	}
@@ -255,12 +255,12 @@ func testStorageUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 			url := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o%s", bucket, path)
 			description := fmt.Sprintf("Storage bucket %s path %s", bucket, path)
 			result := makeUnauthenticatedRequest("Storage", url, "GET", description)
-			
+
 			// Show finding immediately if it's a security issue
 			if result.HasData || result.Accessible {
 				showUnauthFinding(result)
 			}
-			
+
 			results = append(results, result)
 		}
 	}
@@ -288,7 +288,7 @@ func testFunctionsUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 
 	regions := []string{
 		"us-central1",
-		"us-east1", 
+		"us-east1",
 		"europe-west1",
 		"asia-southeast1",
 	}
@@ -298,12 +298,12 @@ func testFunctionsUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 			url := fmt.Sprintf("https://%s-%s.cloudfunctions.net/%s", region, state.ProjectID, funcName)
 			description := fmt.Sprintf("Cloud Function %s in %s", funcName, region)
 			result := makeUnauthenticatedRequest("Functions", url, "GET", description)
-			
+
 			// Show finding immediately if it's a security issue
 			if result.HasData || result.Accessible {
 				showUnauthFinding(result)
 			}
-			
+
 			results = append(results, result)
 		}
 	}
@@ -340,12 +340,12 @@ func testHostingUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 			url := fmt.Sprintf("https://%s%s", domain, path)
 			description := fmt.Sprintf("Hosting %s path %s", domain, path)
 			result := makeUnauthenticatedRequest("Hosting", url, "GET", description)
-			
+
 			// Show finding immediately if it's a security issue
 			if result.HasData || result.Accessible {
 				showUnauthFinding(result)
 			}
-			
+
 			results = append(results, result)
 		}
 	}
@@ -373,12 +373,12 @@ func testRemoteConfigUnauth(state types.State, hasAPIKey bool) []UnauthTestResul
 
 	for _, endpoint := range endpoints {
 		result := makeUnauthenticatedRequest("Remote Config", endpoint.url, "GET", endpoint.description)
-		
+
 		// Show finding immediately if it's a security issue
 		if result.HasData || result.Accessible {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -425,12 +425,12 @@ func testAuthAPIUnauth(state types.State) []UnauthTestResult {
 
 	for _, endpoint := range endpoints {
 		result := makeUnauthenticatedRequest("Firebase Auth", endpoint.path, "POST", endpoint.description+" (with API key)")
-		
+
 		// Show finding immediately if it's a security issue
 		if result.HasData || result.Accessible {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -473,14 +473,14 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 	defer resp.Body.Close()
 
 	result.StatusCode = resp.StatusCode
-	
+
 	// Filter out 404 and other 4xx client errors to reduce false positives
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		result.Accessible = false
 		status.ClearStatus() // Clear status - not a finding
 		return result
 	}
-	
+
 	result.Accessible = resp.StatusCode == 200
 
 	// Check if we got data
@@ -488,7 +488,7 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 		var data interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&data); err == nil {
 			result.HasData = true
-			
+
 			// Store a sample of the data (truncated for display)
 			if dataStr, ok := data.(string); ok && len(dataStr) > 100 {
 				result.DataSample = dataStr[:100] + "..."
@@ -515,7 +515,7 @@ func makeUnauthenticatedRequest(service, url, method, description string) Unauth
 	if !result.HasData && !result.Accessible {
 		status.ClearStatus()
 	}
-	
+
 	return result
 }
 
@@ -534,10 +534,10 @@ func CountUnauthFindings(results []UnauthTestResult) int {
 func testRTDBAdvancedUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 	var results []UnauthTestResult
 
-	// Test path traversal vulnerabilities  
+	// Test path traversal vulnerabilities
 	exploitPaths := []string{
 		"/../admin",
-		"/users/../config", 
+		"/users/../config",
 		"/public/%2e%2e/private",
 		"/data/..",
 		"/.settings/rules",
@@ -546,12 +546,12 @@ func testRTDBAdvancedUnauth(state types.State, hasAPIKey bool) []UnauthTestResul
 
 	for _, path := range exploitPaths {
 		result := makeUnauthenticatedRequest("RTDB Advanced", fmt.Sprintf("https://%s-default-rtdb.firebaseio.com%s.json", state.ProjectID, path), "GET", fmt.Sprintf("Path traversal test: %s", path))
-		
+
 		// Only show if it's actually accessible (security finding)
 		if result.Accessible {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -583,7 +583,7 @@ func testFCMUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 
 	for _, endpoint := range configEndpoints {
 		result := makeUnauthenticatedRequest("FCM Security", endpoint.url, "GET", endpoint.description)
-		
+
 		// Check for FCM keys/sensitive data in the response
 		if result.Accessible && result.DataSample != nil {
 			dataStr := fmt.Sprintf("%v", result.DataSample)
@@ -593,7 +593,7 @@ func testFCMUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 				showUnauthFinding(result)
 			}
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -603,11 +603,11 @@ func testFCMUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 		for _, topic := range commonTopics {
 			topicURL := fmt.Sprintf("https://iid.googleapis.com/iid/info/%s?key=%s", topic, state.APIKey)
 			result := makeUnauthenticatedRequest("FCM Security", topicURL, "GET", fmt.Sprintf("Topic information: %s", topic))
-			
+
 			if result.Accessible && result.HasData {
 				showUnauthFinding(result)
 			}
-			
+
 			results = append(results, result)
 		}
 	}
@@ -623,11 +623,11 @@ func testFCMUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 
 	for _, endpoint := range dynamicLinksEndpoints {
 		result := makeUnauthenticatedRequest("FCM Security", endpoint.url, "GET", endpoint.description)
-		
+
 		if result.Accessible {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -638,14 +638,14 @@ func testFCMUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 func containsFCMKeys(data string) bool {
 	sensitivePatterns := []string{
 		"messagingSenderId",
-		"senderId", 
-		"AAAA", // FCM server key pattern
+		"senderId",
+		"AAAA",   // FCM server key pattern
 		"APA91b", // FCM token pattern
 		"firebase-messaging",
 		"vapidKey",
 		"serverKey",
 	}
-	
+
 	for _, pattern := range sensitivePatterns {
 		if strings.Contains(data, pattern) {
 			return true
@@ -672,11 +672,11 @@ func testServicesUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 
 	for _, endpoint := range serviceEndpoints {
 		result := makeUnauthenticatedRequest("Services", endpoint.url, "GET", endpoint.description)
-		
+
 		if result.Accessible && result.HasData {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -700,7 +700,7 @@ func testAppCheckUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 
 	for _, endpoint := range appCheckEndpoints {
 		result := makeUnauthenticatedRequest("App Check", endpoint.url, "GET", endpoint.description)
-		
+
 		if result.Accessible {
 			// Check if response contains sensitive App Check data
 			if result.DataSample != nil {
@@ -710,12 +710,12 @@ func testAppCheckUnauth(state types.State, hasAPIKey bool) []UnauthTestResult {
 					result.Description += " - Contains App Check configuration"
 				}
 			}
-			
+
 			if result.HasData {
 				showUnauthFinding(result)
 			}
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -739,11 +739,11 @@ func testStorageSecurityUnauth(state types.State, hasAPIKey bool) []UnauthTestRe
 
 	for _, endpoint := range storageEndpoints {
 		result := makeUnauthenticatedRequest("Storage Security", endpoint.url, "GET", endpoint.description)
-		
+
 		if result.Accessible && result.HasData {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 
@@ -752,11 +752,11 @@ func testStorageSecurityUnauth(state types.State, hasAPIKey bool) []UnauthTestRe
 	for _, file := range commonFiles {
 		fileURL := fmt.Sprintf("https://storage.googleapis.com/%s.appspot.com/%s", state.ProjectID, file)
 		result := makeUnauthenticatedRequest("Storage Security", fileURL, "GET", fmt.Sprintf("Public file: %s", file))
-		
+
 		if result.Accessible && result.HasData {
 			showUnauthFinding(result)
 		}
-		
+
 		results = append(results, result)
 	}
 

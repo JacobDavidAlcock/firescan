@@ -97,27 +97,27 @@ func EnumerateServices(mode types.ScanMode, serviceNames []string) ([]types.Serv
 	if !safety.WarnUser(mode) {
 		return nil, fmt.Errorf("user declined to proceed with %s mode", mode.String())
 	}
-	
+
 	var results []types.ServiceEnumResult
 	services := GetFirebaseServices()
 	state := config.GetState()
-	
+
 	// Filter services if specific names provided
 	if len(serviceNames) > 0 {
 		services = filterServices(services, serviceNames)
 	}
-	
+
 	// Test each service
 	for _, service := range services {
 		// Skip services that require higher safety level
 		if mode < service.SafetyLevel {
 			continue
 		}
-		
+
 		result := testService(service, mode, state)
 		results = append(results, result)
 	}
-	
+
 	return results, nil
 }
 
@@ -125,17 +125,17 @@ func EnumerateServices(mode types.ScanMode, serviceNames []string) ([]types.Serv
 func filterServices(services []FirebaseService, names []string) []FirebaseService {
 	var filtered []FirebaseService
 	nameMap := make(map[string]bool)
-	
+
 	for _, name := range names {
 		nameMap[name] = true
 	}
-	
+
 	for _, service := range services {
 		if nameMap[service.Name] {
 			filtered = append(filtered, service)
 		}
 	}
-	
+
 	return filtered
 }
 
@@ -145,7 +145,7 @@ func testService(service FirebaseService, mode types.ScanMode, state types.State
 		Service:     service.Name,
 		SafetyLevel: mode,
 	}
-	
+
 	// Choose appropriate URL based on mode
 	var testURL string
 	switch mode {
@@ -166,11 +166,11 @@ func testService(service FirebaseService, mode types.ScanMode, state types.State
 			testURL = service.ProbeURL
 		}
 	}
-	
+
 	// Replace project ID placeholder
 	testURL = replaceProjectID(testURL, state.ProjectID)
 	result.Endpoint = testURL
-	
+
 	// Make the request
 	switch mode {
 	case types.ProbeMode:
@@ -178,14 +178,14 @@ func testService(service FirebaseService, mode types.ScanMode, state types.State
 	case types.TestMode, types.AuditMode:
 		result = testServiceWithAuth(result, testURL, state)
 	}
-	
+
 	return result
 }
 
 // probeService performs a safe probe of the service (no authentication)
 func probeService(result types.ServiceEnumResult, url string) types.ServiceEnumResult {
 	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	resp, err := client.Head(url) // Use HEAD to avoid downloading data
 	if err != nil {
 		result.Error = err
@@ -193,11 +193,11 @@ func probeService(result types.ServiceEnumResult, url string) types.ServiceEnumR
 		return result
 	}
 	defer resp.Body.Close()
-	
+
 	// Service is accessible if we get any response (even 401/403)
 	result.Accessible = resp.StatusCode < 500
 	result.HasData = resp.StatusCode == 200
-	
+
 	return result
 }
 
@@ -211,10 +211,10 @@ func testServiceWithAuth(result types.ServiceEnumResult, url string, state types
 		return result
 	}
 	defer resp.Body.Close()
-	
+
 	result.Accessible = true
 	result.HasData = resp.StatusCode == 200
-	
+
 	// For test/audit mode, we can read some data (safely)
 	if resp.StatusCode == 200 {
 		// In a real implementation, we'd parse the response
@@ -225,7 +225,7 @@ func testServiceWithAuth(result types.ServiceEnumResult, url string, state types
 			"service":     result.Service,
 		}
 	}
-	
+
 	return result
 }
 

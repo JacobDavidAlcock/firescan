@@ -84,7 +84,7 @@ func TestFCMSecurity(mode types.ScanMode) ([]FCMSecurityResult, error) {
 	}
 	results = append(results, messagingResults...)
 
-	// Test 6: Dynamic Link Security (SAFE - Read-only) 
+	// Test 6: Dynamic Link Security (SAFE - Read-only)
 	dynamicResults := testDynamicLinkSecurity(state, mode)
 	for _, result := range dynamicResults {
 		if result.Finding != "" {
@@ -119,7 +119,7 @@ func testFCMServerKeyExposure(state types.State, mode types.ScanMode) []FCMSecur
 
 	for _, testCase := range testCases {
 		status.ShowStatus(fmt.Sprintf("Testing FCM key exposure: %s", testCase.description))
-		
+
 		result := FCMSecurityResult{
 			TestType:     "FCM Key Exposure",
 			TestCase:     testCase.description,
@@ -196,9 +196,9 @@ func testFCMTopicEnumeration(state types.State, mode types.ScanMode) []FCMSecuri
 		if topicAccess.Accessible {
 			accessibleTopics = append(accessibleTopics, topic)
 			topicDetails = append(topicDetails, map[string]interface{}{
-				"topic":           topic,
+				"topic":            topic,
 				"subscriber_count": topicAccess.SubscriberCount,
-				"metadata":        topicAccess.Metadata,
+				"metadata":         topicAccess.Metadata,
 			})
 		}
 	}
@@ -430,7 +430,7 @@ type FCMTopicAccess struct {
 type TokenValidationTest struct {
 	ValidationBypassable bool
 	ValidationEndpoint   string
-	BypassMethod        string
+	BypassMethod         string
 }
 
 type TokenEnumerationTest struct {
@@ -494,13 +494,13 @@ func testFCMKeyEndpoint(endpoint string, state types.State, requireAuth bool) FC
 		if json.NewDecoder(resp.Body).Decode(&responseData) == nil {
 			// Look for FCM keys and sender IDs in response
 			responseStr := fmt.Sprintf("%v", responseData)
-			
+
 			// Look for server key patterns
 			if strings.Contains(responseStr, "AAAA") && strings.Contains(responseStr, ":APA91b") {
 				result.HasServerKey = true
 				result.KeyPattern = "Server key pattern detected"
 			}
-			
+
 			// Look for sender ID patterns
 			if strings.Contains(responseStr, "messagingSenderId") || strings.Contains(responseStr, "senderId") {
 				result.HasSenderID = true
@@ -519,7 +519,7 @@ func testFCMTopicAccess(topic string, state types.State) FCMTopicAccess {
 
 	// Test topic info endpoint (if available)
 	topicURL := fmt.Sprintf("https://iid.googleapis.com/iid/info/%s?details=true", topic)
-	
+
 	if state.APIKey != "" {
 		topicURL += "&key=" + state.APIKey
 	}
@@ -554,7 +554,7 @@ func testTokenValidationEndpoint(state types.State) TokenValidationTest {
 
 	// Test with dummy token to see if validation can be bypassed
 	testPayload := `{"to":"/topics/test","registration_tokens":["dummy_token_test_123"]}`
-	
+
 	resp, err := http.Post(validationURL+"?key="+state.APIKey, "application/json", strings.NewReader(testPayload))
 	if err != nil {
 		return result
@@ -575,7 +575,7 @@ func testTokenEnumeration(state types.State) TokenEnumerationTest {
 
 	// Test various token enumeration techniques
 	// This is a safe check - we're not actually enumerating real tokens
-	
+
 	// Check if batch operations reveal token validation patterns
 	batchURL := "https://iid.googleapis.com/iid/v1:batchImport"
 	resp, err := http.Post(batchURL+"?key="+state.APIKey, "application/json", strings.NewReader(`{}`))
@@ -621,7 +621,7 @@ func testNotificationContentAccess(endpoint string, state types.State, requireAu
 		var data interface{}
 		if json.NewDecoder(resp.Body).Decode(&data) == nil {
 			dataStr := fmt.Sprintf("%v", data)
-			
+
 			// Check for sensitive content patterns
 			sensitivePatterns := []string{"email", "phone", "personal", "private", "confidential", "internal"}
 			for _, pattern := range sensitivePatterns {
@@ -696,12 +696,12 @@ func testDynamicLinkEndpoint(endpoint string, state types.State, requireAuth boo
 		var data interface{}
 		if json.NewDecoder(resp.Body).Decode(&data) == nil {
 			dataStr := fmt.Sprintf("%v", data)
-			
+
 			// Check for configuration exposure
 			if strings.Contains(dataStr, "domainUriPrefix") || strings.Contains(dataStr, "shortLinks") {
 				result.ConfigurationExposed = true
 			}
-			
+
 			// Check for parameter injection vectors
 			injectionPatterns := []string{"javascript:", "data:", "vbscript:", "onload=", "onerror="}
 			for _, pattern := range injectionPatterns {
@@ -724,15 +724,15 @@ func showFCMFinding(result FCMSecurityResult) {
 
 	// Clear any status message before showing finding
 	status.ClearStatus()
-	
+
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	// Determine color based on severity
 	severityColor := types.ColorCyan
 	switch result.Severity {
 	case "High":
 		severityColor = types.ColorRed
-	case "Medium":  
+	case "Medium":
 		severityColor = types.ColorYellow
 	case "Low":
 		severityColor = types.ColorGreen
@@ -744,6 +744,6 @@ func showFCMFinding(result FCMSecurityResult) {
 		severityColor, result.Severity, types.ColorReset,
 		result.TestType,
 		result.Endpoint)
-		
+
 	fmt.Printf("  └── Details:   %s\n", result.Finding)
 }

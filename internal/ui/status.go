@@ -13,7 +13,7 @@ func ShowStatus(message string) {
 	if lastStatusLength > 0 {
 		fmt.Print("\r" + strings.Repeat(" ", lastStatusLength) + "\r")
 	}
-	
+
 	// Show new status with color
 	statusMessage := fmt.Sprintf("\r[*] %s", message)
 	fmt.Print(statusMessage)

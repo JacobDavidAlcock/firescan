@@ -90,11 +90,13 @@ jobs:
       - name: Run Gosec Security Scanner
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -no-fail -fmt sarif -out results.sarif ./...
+          gosec -no-fail -fmt json -out results.json ./... || true
+          gosec -no-fail ./... || true
 
-      - name: Upload SARIF file
+      - name: Upload Gosec Results
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: results.sarif
+          name: gosec-results
+          path: results.json
         continue-on-error: true

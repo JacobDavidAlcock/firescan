@@ -19,16 +19,16 @@ var FunctionRegions = []string{"us-central1", "us-east1", "us-east4", "europe-we
 
 // ScanOptions represents scan configuration options
 type ScanOptions struct {
-	List           string
-	AllScan        bool
-	RTDBTest       bool
-	FirestoreTest  bool
-	StorageTest    bool
-	FunctionsTest  bool
-	HostingTest    bool
-	JSONOutput     bool
-	Concurrency    int
-	RateLimit      int // requests per second (0 = unlimited)
+	List          string
+	AllScan       bool
+	RTDBTest      bool
+	FirestoreTest bool
+	StorageTest   bool
+	FunctionsTest bool
+	HostingTest   bool
+	JSONOutput    bool
+	Concurrency   int
+	RateLimit     int // requests per second (0 = unlimited)
 }
 
 // RunScan executes the scan with the given options

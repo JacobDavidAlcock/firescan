@@ -1,6 +1,7 @@
 package appcheck
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -180,7 +181,7 @@ func testAppCheckBypass(state types.State) []Result {
 	rtdbURL := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/.json", state.ProjectID)
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	req, err := http.NewRequest("GET", rtdbURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", rtdbURL, nil)
 	if err != nil {
 		bypassResult1.Error = err
 		results = append(results, bypassResult1)
@@ -206,7 +207,7 @@ func testAppCheckBypass(state types.State) []Result {
 		Details:     make(map[string]interface{}),
 	}
 
-	req2, err := http.NewRequest("GET", rtdbURL, nil)
+	req2, err := http.NewRequestWithContext(context.Background(), "GET", rtdbURL, nil)
 	if err != nil {
 		bypassResult2.Error = err
 		results = append(results, bypassResult2)
