@@ -126,16 +126,18 @@ func ValidatePath(path string) (string, error) {
 	cleanPath := filepath.Clean(path)
 
 	// Additional checks for suspicious patterns
+	// Normalize path for comparison by replacing backslashes with forward slashes
+	normalizedPath := strings.ToLower(strings.ReplaceAll(cleanPath, "\\", "/"))
+
 	suspiciousPatterns := []string{
 		"etc/passwd",
 		"windows/system32",
-		"/etc/shadow",
+		"etc/shadow",
 		"c:/windows",
 	}
 
-	lowerPath := strings.ToLower(cleanPath)
 	for _, pattern := range suspiciousPatterns {
-		if strings.Contains(lowerPath, pattern) {
+		if strings.Contains(normalizedPath, pattern) {
 			return "", fmt.Errorf("suspicious path detected - potential security risk")
 		}
 	}
