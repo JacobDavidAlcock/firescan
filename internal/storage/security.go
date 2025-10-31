@@ -31,12 +31,12 @@ type StorageSecurityResult struct {
 
 // StorageTestCase represents a storage security test
 type StorageTestCase struct {
-	ID          string
-	TestType    string
-	Bucket      string
-	Path        string
-	Description string
-	SafetyLevel types.ScanMode
+	ID            string
+	TestType      string
+	Bucket        string
+	Path          string
+	Description   string
+	SafetyLevel   types.ScanMode
 	IsDestructive bool
 }
 
@@ -73,8 +73,8 @@ func TestStorageSecurity(mode types.ScanMode) ([]StorageSecurityResult, error) {
 		results = append(results, uploadResults...)
 	} else {
 		results = append(results, StorageSecurityResult{
-			TestType: "File Upload Validation",
-			Finding:  "Skipped in probe mode - requires test mode for safe file uploads",
+			TestType:    "File Upload Validation",
+			Finding:     "Skipped in probe mode - requires test mode for safe file uploads",
 			SafetyLevel: mode,
 		})
 	}
@@ -84,7 +84,7 @@ func TestStorageSecurity(mode types.ScanMode) ([]StorageSecurityResult, error) {
 		fmt.Printf("\n%s[!] WARNING: Malicious file upload testing can potentially harm the application%s\n", types.ColorRed, types.ColorReset)
 		fmt.Printf("%s[!] This test uploads potentially dangerous files for testing purposes%s\n", types.ColorRed, types.ColorReset)
 		fmt.Printf("%s[!] Files will be automatically cleaned up, but this is DESTRUCTIVE testing%s\n", types.ColorRed, types.ColorReset)
-		
+
 		maliciousResults := testMaliciousFileUploads(state, mode)
 		results = append(results, maliciousResults...)
 	}
@@ -105,7 +105,7 @@ func testCORSMisconfigurations(state types.State, mode types.ScanMode) []Storage
 		// Test CORS headers with different origins
 		testOrigins := []string{
 			"https://evil.com",
-			"https://attacker.example.com", 
+			"https://attacker.example.com",
 			"null",
 			"*",
 		}
@@ -125,14 +125,14 @@ func testCORSMisconfigurations(state types.State, mode types.ScanMode) []Storage
 // testCORSOrigin tests CORS configuration for a specific origin
 func testCORSOrigin(bucket, origin string, state types.State) StorageSecurityResult {
 	result := StorageSecurityResult{
-		TestType: "CORS Misconfiguration",
-		Bucket:   bucket,
-		Details:  make(map[string]interface{}),
+		TestType:    "CORS Misconfiguration",
+		Bucket:      bucket,
+		Details:     make(map[string]interface{}),
 		SafetyLevel: types.ProbeMode,
 	}
 
 	url := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o", bucket)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("OPTIONS", url, nil)
 	if err != nil {
@@ -206,15 +206,15 @@ func testBucketACLs(state types.State, mode types.ScanMode) []StorageSecurityRes
 // testBucketPermissions tests bucket permissions
 func testBucketPermissions(bucket string, state types.State) StorageSecurityResult {
 	result := StorageSecurityResult{
-		TestType: "Bucket ACL",
-		Bucket:   bucket,
-		Details:  make(map[string]interface{}),
+		TestType:    "Bucket ACL",
+		Bucket:      bucket,
+		Details:     make(map[string]interface{}),
 		SafetyLevel: types.ProbeMode,
 	}
 
 	// Test unauthenticated access to bucket listing
 	url := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o", bucket)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -222,7 +222,7 @@ func testBucketPermissions(bucket string, state types.State) StorageSecurityResu
 		return result
 	}
 	resp, err := client.Do(req)
-	
+
 	if err != nil {
 		result.Error = err
 		return result
@@ -235,7 +235,7 @@ func testBucketPermissions(bucket string, state types.State) StorageSecurityResu
 	if resp.StatusCode == 200 {
 		result.Severity = "High"
 		result.Finding = "Bucket allows unauthenticated listing - potential data exposure"
-		
+
 		// Try to read response body to see what's exposed
 		body, err := io.ReadAll(resp.Body)
 		if err == nil && len(body) > 0 {
@@ -255,19 +255,16 @@ func testBucketPermissions(bucket string, state types.State) StorageSecurityResu
 func testBucketAuthContexts(bucket string, state types.State, mode types.ScanMode) []StorageSecurityResult {
 	var results []StorageSecurityResult
 
-	// Test with expired token (if we can generate one safely)
-	// Test with modified token claims
-	// Test with wrong project token
-	
-	// For now, placeholder for auth context testing
-	result := StorageSecurityResult{
-		TestType: "Auth Context Testing",
-		Bucket:   bucket,
-		Finding:  "Auth context testing placeholder - would test token manipulation",
-		SafetyLevel: mode,
-	}
-	
-	results = append(results, result)
+	// Note: Firebase JWT validation is handled by Google's infrastructure and is robust.
+	// Testing JWT manipulation (expired tokens, wrong project tokens, modified claims)
+	// would primarily test Google's security, not the target application's configuration.
+	//
+	// The real security issues are in Security Rules, which are tested by the
+	// write/read access testing modules.
+	//
+	// This function is intentionally left as a no-op as JWT validation testing
+	// provides minimal security value for Firebase applications.
+
 	return results
 }
 
@@ -276,7 +273,7 @@ func testDirectoryTraversal(state types.State, mode types.ScanMode) []StorageSec
 	var results []StorageSecurityResult
 
 	bucket := fmt.Sprintf("%s.appspot.com", state.ProjectID)
-	
+
 	// Directory traversal payloads (safe to test)
 	traversalPaths := []string{
 		"../",
@@ -307,16 +304,16 @@ func testDirectoryTraversal(state types.State, mode types.ScanMode) []StorageSec
 // testTraversalPayload tests a specific directory traversal payload
 func testTraversalPayload(bucket, payload string, state types.State) StorageSecurityResult {
 	result := StorageSecurityResult{
-		TestType: "Directory Traversal",
-		Bucket:   bucket,
-		Path:     payload,
-		Details:  make(map[string]interface{}),
+		TestType:    "Directory Traversal",
+		Bucket:      bucket,
+		Path:        payload,
+		Details:     make(map[string]interface{}),
 		SafetyLevel: types.ProbeMode,
 	}
 
 	// Test with the traversal payload
 	url := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o/%s", bucket, payload)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -376,14 +373,14 @@ func testPublicBucketEnumeration(state types.State, mode types.ScanMode) []Stora
 // testBucketExists tests if a bucket exists and is accessible
 func testBucketExists(bucket string, state types.State) StorageSecurityResult {
 	result := StorageSecurityResult{
-		TestType: "Bucket Enumeration",
-		Bucket:   bucket,
-		Details:  make(map[string]interface{}),
+		TestType:    "Bucket Enumeration",
+		Bucket:      bucket,
+		Details:     make(map[string]interface{}),
 		SafetyLevel: types.ProbeMode,
 	}
 
 	url := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s", bucket)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
@@ -415,7 +412,7 @@ func testFileUploadValidation(state types.State, mode types.ScanMode) []StorageS
 	fmt.Printf("[*] Testing file upload validation (will create test files for cleanup)\n")
 
 	bucket := fmt.Sprintf("%s.appspot.com", state.ProjectID)
-	
+
 	// Safe test files
 	testFiles := []struct {
 		name        string
@@ -466,7 +463,7 @@ func testMaliciousFileUploads(state types.State, mode types.ScanMode) []StorageS
 	fmt.Printf("%s[!] This may upload potentially harmful files to your storage%s\n", types.ColorRed, types.ColorReset)
 
 	bucket := fmt.Sprintf("%s.appspot.com", state.ProjectID)
-	
+
 	// Malicious test payloads (DO NOT make these actually malicious in real testing)
 	maliciousTests := []struct {
 		name        string
@@ -522,10 +519,10 @@ func createSafeZipBomb() []byte {
 
 func testFileUpload(bucket, filename string, content []byte, contentType string, state types.State, cleanup *types.TestCleanup) StorageSecurityResult {
 	result := StorageSecurityResult{
-		TestType: "File Upload Validation",
-		Bucket:   bucket,
-		Path:     filename,
-		Details:  make(map[string]interface{}),
+		TestType:    "File Upload Validation",
+		Bucket:      bucket,
+		Path:        filename,
+		Details:     make(map[string]interface{}),
 		SafetyLevel: types.TestMode,
 	}
 
@@ -534,17 +531,17 @@ func testFileUpload(bucket, filename string, content []byte, contentType string,
 
 	// Attempt upload
 	uploadURL := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o", bucket)
-	
+
 	// Create multipart form data
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	
+
 	fw, err := w.CreateFormFile("file", filename)
 	if err != nil {
 		result.Error = err
 		return result
 	}
-	
+
 	fw.Write(content)
 	w.Close()
 
@@ -575,16 +572,16 @@ func testFileUpload(bucket, filename string, content []byte, contentType string,
 
 func testMaliciousUpload(bucket, filename string, content []byte, contentType, testType string, state types.State, cleanup *types.TestCleanup) StorageSecurityResult {
 	result := StorageSecurityResult{
-		TestType: "Malicious Upload Test",
-		Bucket:   bucket, 
-		Path:     filename,
-		Details:  make(map[string]interface{}),
+		TestType:    "Malicious Upload Test",
+		Bucket:      bucket,
+		Path:        filename,
+		Details:     make(map[string]interface{}),
 		SafetyLevel: types.AuditMode,
 	}
 
 	result.Details["test_type"] = testType
 	result.Details["content_type"] = contentType
-	
+
 	// Add to cleanup
 	safety.AddFileToCleanup(cleanup, filename)
 
@@ -603,13 +600,13 @@ func showStorageFinding(result StorageSecurityResult) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	// Determine color based on severity
 	severityColor := types.ColorCyan
 	switch result.Severity {
 	case "High":
 		severityColor = types.ColorRed
-	case "Medium":  
+	case "Medium":
 		severityColor = types.ColorYellow
 	case "Low":
 		severityColor = types.ColorGreen
@@ -621,6 +618,6 @@ func showStorageFinding(result StorageSecurityResult) {
 		severityColor, result.Severity, types.ColorReset,
 		result.TestType,
 		result.Bucket+"/"+result.Path)
-		
+
 	fmt.Printf("  └── Details:   %s\n", result.Finding)
 }

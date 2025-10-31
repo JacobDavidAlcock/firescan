@@ -165,14 +165,14 @@ func testServiceAccounts(state types.State, mode types.ScanMode) []ManagementSec
 		{
 			path:        fmt.Sprintf("/v1/projects/-/serviceAccounts/%s@%s.iam.gserviceaccount.com", state.ProjectID, state.ProjectID),
 			description: "Default Firebase Admin SDK service account",
-			apiVersion:  "iam", 
+			apiVersion:  "iam",
 			method:      "GET",
 		},
 		{
 			path:        fmt.Sprintf("/v1/projects/-/serviceAccounts/firebase-adminsdk@%s.iam.gserviceaccount.com", state.ProjectID),
 			description: "Firebase Admin SDK service account",
 			apiVersion:  "iam",
-			method:      "GET", 
+			method:      "GET",
 		},
 	}
 
@@ -295,7 +295,7 @@ func testSecurityConfiguration(state types.State, mode types.ScanMode) []Managem
 		},
 		{
 			path:        fmt.Sprintf("/v1/projects/%s/inboundSamlConfigs", state.ProjectID),
-			description: "SAML identity provider configurations", 
+			description: "SAML identity provider configurations",
 			apiVersion:  "identitytoolkit",
 		},
 	}
@@ -385,7 +385,7 @@ func testManagementEndpoint(path, description, apiVersion, method string, state 
 		var responseData interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&responseData); err == nil {
 			result.Details["response_data"] = responseData
-			
+
 			// Analyze response for sensitive information
 			securityAnalysis := analyzeManagementResponse(responseData, description, path)
 			if securityAnalysis.HasSensitiveData {
@@ -433,7 +433,7 @@ func analyzeManagementResponse(data interface{}, description, path string) Secur
 		{"private_key", "High", "Private key exposed in Management API response"},
 		{"client_secret", "High", "OAuth client secret exposed"},
 		{"api_key", "Medium", "API key exposed in configuration"},
-		{"service_account", "Medium", "Service account details exposed"}, 
+		{"service_account", "Medium", "Service account details exposed"},
 		{"members", "Medium", "IAM members enumerated"},
 		{"email", "Low", "Email addresses exposed"},
 		{"projectId", "Low", "Project configuration details exposed"},
@@ -444,7 +444,7 @@ func analyzeManagementResponse(data interface{}, description, path string) Secur
 		if containsFieldRecursive(dataMap, pattern.field) {
 			analysis.HasSensitiveData = true
 			analysis.SensitiveFields = append(analysis.SensitiveFields, pattern.field)
-			
+
 			// Use the highest severity found
 			if analysis.Severity == "" || (pattern.severity == "High" || (pattern.severity == "Medium" && analysis.Severity == "Low")) {
 				analysis.Severity = pattern.severity
@@ -460,7 +460,7 @@ func analyzeManagementResponse(data interface{}, description, path string) Secur
 		analysis.Finding = "Service account enumeration successful - potential privilege escalation"
 	} else if strings.Contains(path, "getIamPolicy") {
 		analysis.HasSensitiveData = true
-		analysis.Severity = "Medium" 
+		analysis.Severity = "Medium"
 		analysis.Finding = "IAM policy enumerated - project access control exposed"
 	} else if strings.Contains(path, "apiKeys") {
 		analysis.HasSensitiveData = true
@@ -477,14 +477,14 @@ func containsFieldRecursive(data map[string]interface{}, field string) bool {
 		if strings.Contains(strings.ToLower(key), strings.ToLower(field)) {
 			return true
 		}
-		
+
 		// Recurse into nested objects
 		if nestedMap, ok := value.(map[string]interface{}); ok {
 			if containsFieldRecursive(nestedMap, field) {
 				return true
 			}
 		}
-		
+
 		// Check arrays of objects
 		if array, ok := value.([]interface{}); ok {
 			for _, item := range array {
@@ -503,19 +503,139 @@ func containsFieldRecursive(data map[string]interface{}, field string) bool {
 func testAPIKeyRestrictions(keys interface{}, state types.State, mode types.ScanMode) []ManagementSecurityResult {
 	var results []ManagementSecurityResult
 
-	// This would analyze API key restrictions, allowed origins, etc.
-	result := ManagementSecurityResult{
-		TestType:    "API Key Security",
-		Details:     make(map[string]interface{}),
-		SafetyLevel: mode,
+	// Parse keys data structure
+	keysList, ok := keys.([]interface{})
+	if !ok {
+		// Try as a map (web app config format)
+		if keysMap, ok := keys.(map[string]interface{}); ok {
+			if apiKey, ok := keysMap["apiKey"].(string); ok {
+				keysList = []interface{}{map[string]interface{}{"keyString": apiKey}}
+			}
+		}
 	}
 
-	result.Details["api_keys_analyzed"] = keys
-	result.Finding = "API key restriction analysis - placeholder for detailed key security testing"
-	result.Severity = "Info"
+	if len(keysList) == 0 {
+		return results
+	}
 
-	results = append(results, result)
+	for _, keyData := range keysList {
+		keyMap, ok := keyData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		result := ManagementSecurityResult{
+			TestType:    "API Key Security",
+			Details:     make(map[string]interface{}),
+			SafetyLevel: mode,
+		}
+
+		// Extract key information
+		keyString, _ := keyMap["keyString"].(string)
+		keyName, _ := keyMap["name"].(string)
+
+		result.Details["key_name"] = keyName
+		result.Details["key_string"] = maskAPIKey(keyString)
+
+		// Check for restrictions
+		restrictions, hasRestrictions := keyMap["restrictions"].(map[string]interface{})
+
+		if !hasRestrictions || restrictions == nil {
+			result.Severity = "High"
+			result.Finding = fmt.Sprintf("⚠️  UNRESTRICTED API KEY: '%s' has NO restrictions - can be used from anywhere", maskAPIKey(keyString))
+			result.Details["unrestricted"] = true
+			result.Details["vulnerability"] = "Unrestricted API Key"
+		} else {
+			// Analyze restriction types
+			var restrictionTypes []string
+			var weaknesses []string
+
+			// Check browser key restrictions
+			if browserRestrictions, ok := restrictions["browserKeyRestrictions"].(map[string]interface{}); ok {
+				if allowedReferrers, ok := browserRestrictions["allowedReferrers"].([]interface{}); ok {
+					restrictionTypes = append(restrictionTypes, "HTTP Referrer")
+					result.Details["allowed_referrers"] = allowedReferrers
+
+					// Check for overly permissive referrers
+					for _, ref := range allowedReferrers {
+						refStr := fmt.Sprintf("%v", ref)
+						if refStr == "*" || refStr == "*/*" {
+							weaknesses = append(weaknesses, "Wildcard referrer restriction allows any domain")
+						}
+					}
+				}
+			}
+
+			// Check server key restrictions
+			if serverRestrictions, ok := restrictions["serverKeyRestrictions"].(map[string]interface{}); ok {
+				if allowedIPs, ok := serverRestrictions["allowedIps"].([]interface{}); ok {
+					restrictionTypes = append(restrictionTypes, "IP Address")
+					result.Details["allowed_ips"] = allowedIPs
+
+					// Check for overly broad IP ranges
+					for _, ip := range allowedIPs {
+						ipStr := fmt.Sprintf("%v", ip)
+						if ipStr == "0.0.0.0/0" || ipStr == "::/0" {
+							weaknesses = append(weaknesses, "IP restriction allows all addresses")
+						}
+					}
+				}
+			}
+
+			// Check Android app restrictions
+			if androidRestrictions, ok := restrictions["androidKeyRestrictions"].(map[string]interface{}); ok {
+				if allowedApps, ok := androidRestrictions["allowedApplications"].([]interface{}); ok {
+					restrictionTypes = append(restrictionTypes, "Android App")
+					result.Details["allowed_android_apps"] = allowedApps
+				}
+			}
+
+			// Check iOS app restrictions
+			if iosRestrictions, ok := restrictions["iosKeyRestrictions"].(map[string]interface{}); ok {
+				if allowedBundleIds, ok := iosRestrictions["allowedBundleIds"].([]interface{}); ok {
+					restrictionTypes = append(restrictionTypes, "iOS App")
+					result.Details["allowed_ios_bundles"] = allowedBundleIds
+				}
+			}
+
+			// Check API restrictions
+			if apiTargets, ok := restrictions["apiTargets"].([]interface{}); ok {
+				result.Details["restricted_apis"] = apiTargets
+				if len(apiTargets) == 0 {
+					weaknesses = append(weaknesses, "No API service restrictions - key can access all Firebase/GCP APIs")
+				}
+			} else {
+				weaknesses = append(weaknesses, "No API service restrictions - key can access all Firebase/GCP APIs")
+			}
+
+			// Determine severity and finding
+			if len(weaknesses) > 0 {
+				result.Severity = "Medium"
+				result.Finding = fmt.Sprintf("⚠️  WEAK API KEY RESTRICTIONS: '%s' has weak restrictions: %s",
+					maskAPIKey(keyString), strings.Join(weaknesses, "; "))
+				result.Details["vulnerability"] = "Weak API Key Restrictions"
+			} else if len(restrictionTypes) > 0 {
+				result.Severity = "Info"
+				result.Finding = fmt.Sprintf("✓ API key '%s' has proper restrictions: %s",
+					maskAPIKey(keyString), strings.Join(restrictionTypes, ", "))
+			}
+
+			result.Details["restriction_types"] = restrictionTypes
+			result.Details["weaknesses"] = weaknesses
+		}
+
+		results = append(results, result)
+	}
+
 	return results
+}
+
+// maskAPIKey masks an API key for display
+func maskAPIKey(key string) string {
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
 }
 
 // Helper functions
@@ -558,13 +678,13 @@ func showManagementFinding(result ManagementSecurityResult) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	// Determine color based on severity
 	severityColor := types.ColorCyan
 	switch result.Severity {
 	case "High":
 		severityColor = types.ColorRed
-	case "Medium":  
+	case "Medium":
 		severityColor = types.ColorYellow
 	case "Low":
 		severityColor = types.ColorGreen
@@ -576,6 +696,6 @@ func showManagementFinding(result ManagementSecurityResult) {
 		severityColor, result.Severity, types.ColorReset,
 		result.TestType,
 		result.Endpoint)
-		
+
 	fmt.Printf("  └── Details:   %s\n", result.Finding)
 }
