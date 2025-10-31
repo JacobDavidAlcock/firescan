@@ -363,17 +363,17 @@ func TestValidatePath(t *testing.T) {
 		{
 			name:      "suspicious path - etc/passwd",
 			path:      "/etc/passwd",
-			wantError: false, // ValidatePath only checks for .. traversal, not specific paths
+			wantError: false, // ValidatePath only checks for .. traversal (platform-specific path detection unreliable)
 		},
 		{
 			name:      "suspicious path - windows system32",
 			path:      "C:/Windows/System32/config",
-			wantError: false, // ValidatePath only checks for .. traversal, not specific paths
+			wantError: false, // ValidatePath only checks for .. traversal (platform-specific path detection unreliable)
 		},
 		{
 			name:      "suspicious path - etc/shadow",
 			path:      "/etc/shadow",
-			wantError: false, // ValidatePath only checks for .. traversal, not specific paths
+			wantError: false, // ValidatePath only checks for .. traversal (platform-specific path detection unreliable)
 		},
 	}
 
