@@ -63,10 +63,13 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	results := make(chan types.Finding)
 	errors := make(chan types.ScanError)
 	var wg sync.WaitGroup
+	var checkedCount int64
+	var foundCount int32
+	var errorCount int32
 
 	for i := 0; i < options.Concurrency; i++ {
 		wg.Add(1)
-		go worker(jobs, results, errors, limiter, ctx, &wg)
+		go worker(jobs, results, errors, limiter, ctx, &wg, &checkedCount)
 	}
 
 	// Calculate total checks
@@ -88,9 +91,6 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 	}
 
 	findings := make([]types.Finding, 0)
-	var foundCount int32
-	var checkedCount int64
-	var errorCount int32
 
 	// Start progress monitoring
 	done := make(chan bool)
@@ -113,9 +113,8 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 					continue
 				}
 				atomic.AddInt32(&foundCount, 1)
-				if options.JSONOutput {
-					findings = append(findings, finding)
-				} else {
+				findings = append(findings, finding)
+				if !options.JSONOutput {
 					fmt.Printf("\r%80s\r", "")
 					printFinding(finding)
 				}
@@ -161,16 +160,13 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 		for _, item := range wordlistItems {
 			if options.RTDBTest {
 				jobs <- types.Job{Type: "rtdb", Path: item}
-				atomic.AddInt64(&checkedCount, 1)
 			}
 			if options.FirestoreTest {
 				jobs <- types.Job{Type: "firestore", Path: item}
-				atomic.AddInt64(&checkedCount, 1)
 			}
 			if options.FunctionsTest {
 				for _, region := range FunctionRegions {
 					jobs <- types.Job{Type: "function", Path: fmt.Sprintf("%s/%s", region, item)}
-					atomic.AddInt64(&checkedCount, 1)
 				}
 			}
 		}
@@ -219,7 +215,7 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 }
 
 // worker processes jobs from the job channel
-func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- types.ScanError, limiter *ratelimit.Limiter, ctx context.Context, wg *sync.WaitGroup) {
+func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- types.ScanError, limiter *ratelimit.Limiter, ctx context.Context, wg *sync.WaitGroup, checkedCount *int64) {
 	defer wg.Done()
 	for job := range jobs {
 		// Apply rate limiting before each request
@@ -236,6 +232,9 @@ func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- t
 		case "function":
 			CheckFunction(job, results, errors)
 		}
+
+		// Increment checked count after processing
+		atomic.AddInt64(checkedCount, 1)
 	}
 }
 
