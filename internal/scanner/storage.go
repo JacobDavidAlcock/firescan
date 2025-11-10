@@ -33,8 +33,9 @@ func CheckCloudStorage(results chan<- types.Finding, errors chan<- types.ScanErr
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// Only report non-404 errors
-		if resp.StatusCode != http.StatusNotFound {
+		// 404 means bucket doesn't exist, 403 means access is properly denied
+		// Both are expected behaviors and should not be reported as errors
+		if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusForbidden {
 			errors <- types.ScanError{
 				Timestamp: time.Now().Format(time.RFC3339),
 				JobType:   "Storage",
