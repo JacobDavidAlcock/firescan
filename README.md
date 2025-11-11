@@ -1,4 +1,5 @@
 <div align="center">
+
 <pre>
 ███████╗██╗██████╗ ███████╗███████╗ ██████╗ █████╗ ███╗   ██╗
 ██╔════╝██║██╔══██╗██╔════╝██╔════╝██╔════╝██╔══██╗████╗  ██║
@@ -7,185 +8,193 @@
 ██║     ██║██║  ██║███████╗███████║╚██████╗██║  ██║██║ ╚████║
 ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 </pre>
-<h1>🔥 FireScan: The Firebase Security Auditor 🔥</h1>
-<p>
-<strong>A comprehensive, interactive console for auditing the security of Firebase applications.</strong>
-</p>
-<p>
-<a href="https://github.com/JacobDavidAlcock/firescan/releases"><img src="https://img.shields.io/github/v/release/JacobDavidAlcock/firescan" alt="Release"></a>
-<a href="https://github.com/JacobDavidAlcock/firescan/blob/main/LICENSE"><img src="https://img.shields.io/github/license/JacobDavidAlcock/firescan" alt="License"></a>
-<a href="https://go.dev/"><img src="https://img.shields.io/badge/made%20with-Go-00ADD8.svg" alt="Made with Go"></a>
-</p>
+
+# FireScan
+
+**Automated security testing for Firebase applications**
+
+[![Release](https://img.shields.io/github/v/release/JacobDavidAlcock/firescan)](https://github.com/JacobDavidAlcock/firescan/releases)
+[![License](https://img.shields.io/github/license/JacobDavidAlcock/firescan)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/JacobDavidAlcock/firescan)](go.mod)
+[![Build Status](https://github.com/JacobDavidAlcock/firescan/workflows/Test/badge.svg)](https://github.com/JacobDavidAlcock/firescan/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/JacobDavidAlcock/firescan)](https://goreportcard.com/report/github.com/JacobDavidAlcock/firescan)
+
+<img src="demo.gif" alt="FireScan Demo" width="800px">
+
 </div>
 
----
+## Overview
 
-**FireScan** is a powerful security tool designed for penetration testers and developers to audit the security posture of Firebase applications. It provides an interactive console to enumerate databases, test storage rules, check function security, and much more, all from a single, easy-to-use interface.
+Interactive security auditing tool for Firebase. Automatically enumerates and tests Realtime Database, Firestore, Cloud Storage, Cloud Functions, and Authentication.
 
-## ✨ Features
+**Features:**
+- Interactive console with command history
+- Concurrent scanning (1-1000 workers)
+- Automatic JWT refresh
+- Built-in wordlists with case variations
+- Three safety modes: probe (read-only), test (safe writes), audit (deep testing)
+- JSON output
 
-- **Interactive Console:** A `msfconsole`-style interface with command history and tab-completion.
-- **Automated Authentication:** Automatically create a test account or use your own credentials to get a session token.
-- **Automatic Token Refresh:** Seamlessly refreshes expired JWTs during long scans.
-- **Comprehensive Enumeration:**
-  - **Realtime Database (RTDB):** Discovers readable nodes.
-  - **Firestore:** Discovers readable collections.
-  - **Cloud Storage:** Checks for listable storage buckets.
-  - **Cloud Functions:** Enumerates and tests for publicly invokable functions.
-  - **Hosting:** Checks for publicly exposed `firebase.json` configuration files.
-- **Auth Provider Enumeration:** Probes the target to discover which authentication methods (Email/Password, Google, etc.) are enabled.
-- **Data Extraction:** Dump the contents of any discovered readable database path or collection.
-- **Intelligent Wordlists:** Comes with built-in, context-specific wordlists and automatically generates case variations (`users`, `Users`, `USERS`) for thorough testing.
-- **Flexible Output:** Supports both human-readable and JSON output for easy integration with other tools.
-- **Configuration Files:** Load target configurations from a YAML file for quick setup.
-- **Session Management:** Save and resume authentication sessions for quick workflow continuity.
-- **Email Verification:** Automatic email verification for custom test accounts.
-- **Modular Architecture:** Clean, maintainable codebase with separated concerns for easy extension.
+## Quick Start
 
-## 🚀 Getting Started
+**Install:**
+```bash
+# Using Go
+go install github.com/JacobDavidAlcock/firescan/cmd/firescan@latest
 
-### Installation
+# Or download binary
+https://github.com/JacobDavidAlcock/firescan/releases/latest
+```
 
-You can install `firescan` in one of two ways:
+**Usage:**
+```bash
+firescan
+> set projectID your-firebase-app
+> set apiKey AIzaSy...
+> auth --create-account
+> scan --all
+```
 
-**1. From Source (Recommended for Go users):**
+## Commands
 
+**Authentication:**
+```bash
+auth --create-account              # Create test account
+auth -e user@email.com -P pass     # Login with credentials
+auth --enum-providers              # Enumerate auth providers
+auth logout                        # Clear session
+```
+
+**Scanning:**
+```bash
+scan --all                         # Scan all services
+scan --rtdb --firestore            # Specific services
+scan --unauth                      # Test without authentication
+scan --all -c 100 --rate-limit 50  # 100 workers, 50 req/s
+scan --all --json                  # JSON output
+```
+
+**Data Extraction:**
+```bash
+extract --firestore --path users
+extract --rtdb --path /admin/config
+extract --firestore --path users --output data.json
+```
+
+**Wordlists:**
+```bash
+wordlist show                      # List available wordlists
+wordlist show users                # View wordlist contents
+wordlist add custom admin,secret   # Create custom wordlist
+```
+
+Built-in wordlists: `users`, `config`, `passwords`, `functions`, `database`, `storage`, `security`, `all`
+
+## Service Coverage
+
+| Service | Capabilities |
+|---------|-------------|
+| **Realtime Database** | Node enumeration, read access testing, root exposure detection |
+| **Firestore** | Collection discovery, document enumeration, permission testing |
+| **Cloud Storage** | Bucket listing, file enumeration, ACL testing |
+| **Cloud Functions** | Function discovery across 7 regions, auth validation |
+| **Authentication** | Provider enumeration, JWT testing, token validation |
+
+## Safety Modes
+
+```
+🟢 PROBE (default)  → Read-only operations
+🟡 TEST             → Safe write tests with cleanup
+🔴 AUDIT            → Deep testing (requires confirmation)
+```
+
+## Installation
+
+**Linux:**
+```bash
+curl -sL https://github.com/JacobDavidAlcock/firescan/releases/latest/download/firescan-linux-amd64.tar.gz | tar xz
+sudo mv firescan /usr/local/bin/
+```
+
+**macOS:**
+```bash
+curl -sL https://github.com/JacobDavidAlcock/firescan/releases/latest/download/firescan-darwin-amd64.tar.gz | tar xz
+sudo mv firescan /usr/local/bin/
+```
+
+**Windows:**
+Download from [releases](https://github.com/JacobDavidAlcock/firescan/releases/latest), extract, and add to PATH.
+
+**From Source:**
 ```bash
 git clone https://github.com/JacobDavidAlcock/firescan.git
 cd firescan
-go build cmd/firescan/main.go
+go build -o firescan cmd/firescan/main.go
 ```
 
-Or install directly:
+## Examples
+
+**Penetration Testing:**
 ```bash
-go install github.com/JacobDavidAlcock/firescan/cmd/firescan@latest
+> set projectID target-app
+> auth --create-account
+> scan --all --json > findings.json
 ```
 
-**2. From Pre-compiled Binaries:**
-Download the latest pre-compiled binary for your operating system from the [**Releases**](https://github.com/JacobDavidAlcock/firescan/releases) page.
+**Pre-deployment Check:**
+```bash
+> scan --unauth
+> scan --rules
+```
 
-### Quick Start
+**Bug Bounty:**
+```bash
+> scan --all -c 100 --rate-limit 50
+> extract --firestore --path users --output evidence.json
+```
 
-1.  **Launch the tool:**
+## Comparison
 
-    ```bash
-    firescan
-    ```
+| Feature | FireScan | Manual Testing | Firebase Emulator |
+|---------|----------|----------------|-------------------|
+| Speed | ~2 minutes | 20+ minutes | N/A |
+| Automation | Full | Manual | Partial |
+| Service Coverage | All services | All services | Limited |
+| Production Testing | ✅ Safe | ⚠️ Risky | ❌ Dev only |
 
-2.  **Set your target's Project ID and API Key:**
+## Roadmap
 
-    ```
-    firescan > set projectID your-project-id
-    firescan > set apiKey your-web-api-key
-    ```
+**Current (v2.1.0)**
+- Full service scanning (RTDB, Firestore, Storage, Functions, Auth)
+- Three safety modes
+- Session management and auto-refresh
+- Custom wordlists and JSON output
 
-    _(You can find these in the client-side `firebaseConfig` object of the target web application)._
+**Next (v2.2.0)**
+- Cleanup implementation
+- HTML/PDF report generation
+- Enhanced error reporting
 
-3.  **Authenticate:** The easiest way is to let `firescan` create a test account.
+**Planned (v3.0.0)**
+- Firebase rules analyzer
+- Multi-project scanning
+- CI/CD integration
+- Continuous monitoring mode
 
-    ```
-    firescan > auth --create-account
-    ```
+## Legal
 
-4.  **Run a full scan:**
-    ```
-    firescan > scan --all
-    ```
+⚠️ **FireScan is for authorized security testing only.** Unauthorized testing is illegal.
 
-## 📖 Usage
+## License
 
-`firescan` operates as an interactive console. Here are the main commands:
+MIT License - see [LICENSE](LICENSE)
 
-### `set <variable> <value>`
+---
 
-Sets a configuration variable for the current session.
+<div align="center">
 
-- **Variables:** `projectID`, `apiKey`, `token`
-- **Example:**
-  ```
-  firescan > set projectID my-cool-app-12345
-  ```
+**Made by [Jacob Alcock](https://jacobalcock.co.uk)**
 
-### `show options`
+[Website](https://jacobalcock.co.uk) • [Twitter](https://twitter.com/jacobalcock) • [Blog](https://blog.jacobalcock.co.uk)
 
-Displays the current configuration.
-
-### `auth`
-
-Handles authentication to get a JWT.
-
-- **Flags:**
-  - `--create-account`: Creates/logs in with a default test account (`fire@scan.com`).
-  - `-e <email> -P <password>`: Logs in with your own credentials.
-  - `logout`: Clears the current session token.
-  - `--enum-providers`: Probes the backend to discover which auth methods are enabled.
-- **Example:**
-  ```
-  firescan > auth --enum-providers
-  firescan > auth --create-account
-  ```
-
-### `scan`
-
-Runs enumeration modules against the target.
-
-- **Flags:**
-  - `--all`: A shortcut to run all scan modules (`--rtdb`, `--firestore`, `--storage`, `--functions`, `--hosting`) with the `all` wordlist.
-  - `--rtdb`: Scans for readable Realtime Database nodes.
-  - `--firestore`: Scans for readable Firestore collections.
-  - `--storage`: Checks for a listable Cloud Storage bucket.
-  - `--functions`: Enumerates Cloud Functions.
-  - `--hosting`: Checks for a public `firebase.json`.
-  - `-l <list>`: Specifies a wordlist to use. Can be a built-in keyword (`users`, `config`, `all`, etc.) or a file path. Defaults to `all`.
-  - `--json`: Outputs findings in JSON format.
-- **Example:**
-  ```
-  firescan > scan --all
-  firescan > scan --rtdb --firestore -l users
-  ```
-
-### `extract`
-
-Dumps data from a readable database path.
-
-- **Flags:**
-  - `--rtdb --path <node_path>`: Dumps data from a Realtime Database node.
-  - `--firestore --path <collection_path>`: Dumps all documents from a Firestore collection.
-- **Example:**
-  ```
-  firescan > extract --firestore --path Users
-  ```
-
-### `wordlist`
-
-Manages wordlists for the current session.
-
-- **Commands:**
-  - `show`: Lists the names of all available built-in wordlists.
-  - `show <name>`: Shows the contents of a specific list.
-  - `add <name> <word1,word2,...>`: Creates a new wordlist for the current session.
-- **Example:**
-  ```
-  firescan > wordlist show
-  firescan > wordlist add custom users,config,settings
-  firescan > scan -l custom
-  ```
-
-### `make-config`
-
-Prints an example `config.yaml` file that you can use to quickly load settings at startup.
-
-- **Example:**
-  ```
-  firescan > make-config > my_project.yaml
-  # Then launch with:
-  ./firescan --config my_project.yaml
-  ```
-
-## ⚖️ License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/JacobDavidAlcock/firescan/issues).
+</div>
