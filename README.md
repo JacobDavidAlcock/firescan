@@ -195,6 +195,6 @@ MIT License - see [LICENSE](LICENSE)
 
 **Made by [Jacob Alcock](https://jacobalcock.co.uk)**
 
-[Website](https://jacobalcock.co.uk) • [Twitter](https://twitter.com/jacobalcock) • [Blog](https://blog.jacobalcock.co.uk)
+[Website](https://jacobalcock.co.uk) • [LinkedIn](https://www.linkedin.com/in/jacob-alcock/) • [Blog](https://blog.jacobalcock.co.uk)
 
 </div>
