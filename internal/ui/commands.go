@@ -233,7 +233,7 @@ func HandleScan(args []string) {
 	}
 
 	// Show rate limit info if enabled
-	if *rateLimit > 0 {
+	if *rateLimit > 0 && !*jsonOutput {
 		fmt.Printf("[*] Rate limiting enabled: %d requests/second\n", *rateLimit)
 	}
 
@@ -300,22 +300,28 @@ func HandleScan(args []string) {
 	// For unauthenticated testing, only projectID is required
 	if *unauthTest {
 		if state.ProjectID == "" {
-			fmt.Println("❌ Error: projectID must be set for unauthenticated testing. Use 'set projectID <your-project-id>'.")
+			if !*jsonOutput {
+				fmt.Println("❌ Error: projectID must be set for unauthenticated testing. Use 'set projectID <your-project-id>'.")
+			}
 			return
 		}
 		// API key is optional - will be used if available for enhanced testing
-		if state.APIKey != "" {
-			fmt.Printf("[*] Enhanced unauthenticated testing enabled with API key\n")
-		} else {
-			fmt.Printf("[*] Basic unauthenticated testing (set API key for enhanced testing)\n")
+		if !*jsonOutput {
+			if state.APIKey != "" {
+				fmt.Printf("[*] Enhanced unauthenticated testing enabled with API key\n")
+			} else {
+				fmt.Printf("[*] Basic unauthenticated testing (set API key for enhanced testing)\n")
+			}
 		}
 	} else {
 		// For authenticated tests, both projectID and token are required
 		if hasTraditionalScans || *rulesTest || *writeTest || *servicesTest || *appCheckTest || *authAttackTest || *storageSecTest || *managementTest || *rtdbAdvancedTest || *fcmTest {
 			if state.ProjectID == "" || state.Token == "" {
-				fmt.Println("❌ Error: projectID and token must be set before authenticated scanning.")
-				fmt.Println("   To authenticate: use 'set' and 'auth' commands")
-				fmt.Println("   For unauthenticated testing: scan --unauth")
+				if !*jsonOutput {
+					fmt.Println("❌ Error: projectID and token must be set before authenticated scanning.")
+					fmt.Println("   To authenticate: use 'set' and 'auth' commands")
+					fmt.Println("   For unauthenticated testing: scan --unauth")
+				}
 				return
 			}
 		}
@@ -359,7 +365,9 @@ func HandleScan(args []string) {
 			services = append(services, "firestore")
 		}
 
-		fmt.Printf("\n%s[*] Running Security Rules Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Security Rules Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		ruleResults, err := runRulesTest(scanMode, services)
 		if err != nil {
 			fmt.Printf("❌ Error during rules testing: %v\n", err)
@@ -384,7 +392,9 @@ func HandleScan(args []string) {
 			services = append(services, "storage")
 		}
 
-		fmt.Printf("\n%s[*] Running Write Access Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Write Access Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		writeResults, err := runWriteTest(scanMode, services)
 		if err != nil {
 			fmt.Printf("❌ Error during write testing: %v\n", err)
@@ -398,7 +408,9 @@ func HandleScan(args []string) {
 
 	// Services enumeration
 	if *servicesTest {
-		fmt.Printf("\n%s[*] Running Firebase Services Enumeration (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Firebase Services Enumeration (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		serviceResults, err := runServicesTest(scanMode, []string{})
 		if err != nil {
 			fmt.Printf("❌ Error during services enumeration: %v\n", err)
@@ -416,7 +428,9 @@ func HandleScan(args []string) {
 
 	// App Check testing
 	if *appCheckTest {
-		fmt.Printf("\n%s[*] Running Firebase App Check Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Firebase App Check Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		appCheckResults, err := appcheck.TestAppCheck(scanMode)
 		if err != nil {
 			fmt.Printf("❌ Error during App Check testing: %v\n", err)
@@ -433,7 +447,9 @@ func HandleScan(args []string) {
 		if scanMode < types.TestMode {
 			fmt.Printf("[!] Advanced authentication testing requires test mode or higher. Use --test or --audit.\n")
 		} else {
-			fmt.Printf("\n%s[*] Running Advanced Authentication Attack Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+			if !*jsonOutput {
+				fmt.Printf("\n%s[*] Running Advanced Authentication Attack Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+			}
 			authResults, err := auth.TestAdvancedAuth(scanMode)
 			if err != nil {
 				fmt.Printf("❌ Error during advanced auth testing: %v\n", err)
@@ -448,7 +464,9 @@ func HandleScan(args []string) {
 
 	// Unauthenticated access testing
 	if *unauthTest {
-		fmt.Printf("\n%s[*] Running Unauthenticated Access Testing%s\n", types.ColorCyan, types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Unauthenticated Access Testing%s\n", types.ColorCyan, types.ColorReset)
+		}
 		unauthResults, err := unauth.TestUnauthenticated(scanMode)
 		if err != nil {
 			fmt.Printf("❌ Error during unauthenticated testing: %v\n", err)
@@ -461,7 +479,9 @@ func HandleScan(args []string) {
 
 	// Storage Security Deep Testing
 	if *storageSecTest {
-		fmt.Printf("\n%s[*] Running Firebase Storage Deep Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Firebase Storage Deep Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		storageResults, err := storage.TestStorageSecurity(scanMode)
 		if err != nil {
 			fmt.Printf("❌ Error during storage security testing: %v\n", err)
@@ -477,7 +497,9 @@ func HandleScan(args []string) {
 
 	// Firebase Management API Security Testing
 	if *managementTest {
-		fmt.Printf("\n%s[*] Running Firebase Management API Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running Firebase Management API Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		mgmtResults, err := management.TestManagementAPISecurity(scanMode)
 		if err != nil {
 			fmt.Printf("❌ Error during Management API testing: %v\n", err)
@@ -493,7 +515,9 @@ func HandleScan(args []string) {
 
 	// RTDB Advanced Rule Context Testing
 	if *rtdbAdvancedTest {
-		fmt.Printf("\n%s[*] Running RTDB Advanced Rule Context Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running RTDB Advanced Rule Context Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		rtdbResults, err := rtdb.TestRTDBAdvancedSecurity(scanMode)
 		if err != nil {
 			fmt.Printf("❌ Error during RTDB advanced testing: %v\n", err)
@@ -509,7 +533,9 @@ func HandleScan(args []string) {
 
 	// FCM & Push Notification Security Testing
 	if *fcmTest {
-		fmt.Printf("\n%s[*] Running FCM & Push Notification Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		if !*jsonOutput {
+			fmt.Printf("\n%s[*] Running FCM & Push Notification Security Testing (%s mode)%s\n", types.ColorCyan, scanMode.String(), types.ColorReset)
+		}
 		fcmResults, err := fcm.TestFCMSecurity(scanMode)
 		if err != nil {
 			fmt.Printf("❌ Error during FCM testing: %v\n", err)
@@ -523,7 +549,9 @@ func HandleScan(args []string) {
 		}
 	}
 
-	fmt.Printf("\n\n✅ Scan complete. Found %d total findings.\n", totalFindings)
+	if !*jsonOutput {
+		fmt.Printf("\n\n✅ Scan complete. Found %d total findings.\n", totalFindings)
+	}
 }
 
 // runRulesTest executes security rules testing

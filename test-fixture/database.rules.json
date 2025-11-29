@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "insecure_node": {
+      ".read": true,
+      ".write": true
+    },
+    "secure_node": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

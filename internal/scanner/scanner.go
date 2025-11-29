@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"firescan/internal/auth"
 	"firescan/internal/config"
 	"firescan/internal/logger"
 	"firescan/internal/ratelimit"
@@ -26,6 +27,7 @@ type ScanOptions struct {
 	StorageTest   bool
 	FunctionsTest bool
 	HostingTest   bool
+	AuthTest      bool
 	JSONOutput    bool
 	Concurrency   int
 	RateLimit     int // requests per second (0 = unlimited)
@@ -41,9 +43,9 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 
 	// Validate state
 	state := config.GetState()
-	if state.ProjectID == "" || state.Token == "" {
-		logger.Error("Scan failed: projectID and token must be set")
-		return nil, fmt.Errorf("projectID and token must be set before scanning")
+	if state.ProjectID == "" {
+		logger.Error("Scan failed: projectID must be set")
+		return nil, fmt.Errorf("projectID must be set before scanning")
 	}
 
 	// Load wordlist
@@ -84,7 +86,8 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 		totalChecks += len(wordlistItems) * len(FunctionRegions)
 	}
 	if options.StorageTest {
-		totalChecks++
+		totalChecks++ // Bucket check
+		totalChecks += len(wordlistItems) // Object checks
 	}
 	if options.HostingTest {
 		totalChecks++
@@ -169,6 +172,9 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 					jobs <- types.Job{Type: "function", Path: fmt.Sprintf("%s/%s", region, item)}
 				}
 			}
+			if options.StorageTest {
+				jobs <- types.Job{Type: "storage", Path: item}
+			}
 		}
 		close(jobs)
 	}()
@@ -185,6 +191,37 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 		wg.Add(1)
 		go func() {
 			CheckHostingConfig(results, errors, &wg)
+			atomic.AddInt64(&checkedCount, 1)
+		}()
+	}
+
+	// Auth Enumeration
+	if options.AuthTest {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// We need API Key for this
+			if state.APIKey != "" {
+				providers := auth.EnumerateAuthProviders(state.APIKey)
+				for provider, enabled := range providers {
+					if enabled {
+						results <- types.Finding{
+							Timestamp: time.Now().Format(time.RFC3339),
+							Severity:  "Medium",
+							Type:      "Auth",
+							Path:      provider,
+							Status:    "Enabled",
+						}
+					}
+				}
+			} else {
+				errors <- types.ScanError{
+					Timestamp: time.Now().Format(time.RFC3339),
+					JobType:   "Auth",
+					Path:      "Enumeration",
+					Message:   "API Key required for Auth Enumeration",
+				}
+			}
 			atomic.AddInt64(&checkedCount, 1)
 		}()
 	}
@@ -231,6 +268,8 @@ func worker(jobs <-chan types.Job, results chan<- types.Finding, errors chan<- t
 			CheckFirestore(job, results, errors)
 		case "function":
 			CheckFunction(job, results, errors)
+		case "storage":
+			CheckStoragePath(job, results, errors)
 		}
 
 		// Increment checked count after processing

@@ -1,0 +1,14 @@
+insecure_collection
+insecure_node
+insecure
+publicFunction
+secret_doc
+users
+admin
+config
+insecure/secret.txt
+secure_node
+secure_collection
+secure
+privateFunction
+secure/secret.txt

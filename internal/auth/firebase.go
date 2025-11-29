@@ -104,7 +104,9 @@ func MakeAuthenticatedRequest(method, url, token, email, password, apiKey string
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := httpclient.Do(req)
 	if err != nil {
@@ -300,7 +302,9 @@ func MakeAuthenticatedRequestWithBody(method, url, body, token, email, password,
 	}
 
 	// Add authentication header
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}

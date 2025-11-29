@@ -102,6 +102,10 @@ func testCORSMisconfigurations(state types.State, mode types.ScanMode) []Storage
 	}
 
 	for _, bucket := range buckets {
+		// Track findings for this bucket to avoid duplicates
+		foundWildcard := false
+		foundMalicious := false
+
 		// Test CORS headers with different origins
 		testOrigins := []string{
 			"https://evil.com",
@@ -112,10 +116,26 @@ func testCORSMisconfigurations(state types.State, mode types.ScanMode) []Storage
 
 		for _, origin := range testOrigins {
 			result := testCORSOrigin(bucket, origin, state)
+			
+			// Only show and append finding if we haven't seen this type for this bucket yet
 			if result.Finding != "" {
-				showStorageFinding(result)
+				isWildcard := strings.Contains(result.Finding, "wildcard")
+				isMalicious := strings.Contains(result.Finding, "malicious")
+
+				if isWildcard && !foundWildcard {
+					showStorageFinding(result)
+					foundWildcard = true
+					results = append(results, result)
+				} else if isMalicious && !foundMalicious {
+					showStorageFinding(result)
+					foundMalicious = true
+					results = append(results, result)
+				} else if !isWildcard && !isMalicious {
+					// Other types of findings (if any)
+					showStorageFinding(result)
+					results = append(results, result)
+				}
 			}
-			results = append(results, result)
 		}
 	}
 

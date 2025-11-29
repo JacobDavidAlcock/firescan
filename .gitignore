@@ -32,6 +32,40 @@ firescan_sessions.yaml
 # OS generated files
 .DS_Store
 .DS_Store?
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/firescan
+/firescan-*
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Go workspace file
+go.work
+
+# Session files (user-specific)
+firescan_sessions.yaml
+
+# History files
+/tmp/firescan_history.tmp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
@@ -43,3 +77,13 @@ Thumbs.db
 temp/
 tmp/
 /dist
+
+# Test Fixture 
+test-fixture/config.json
+
+# Logs and Output
+*.log
+output.txt
+e2e_output*.txt
+custom_wordlist.txt
+/test-fixture/functions/node_modules

@@ -14,7 +14,7 @@ const (
 
 // State holds the global configuration for the console session - exactly as in original
 type State struct {
-	ProjectID string `yaml:"projectID"`
+	ProjectID string `yaml:"projectId"`
 	APIKey    string `yaml:"apiKey"`
 	Token     string `yaml:"-"`
 	// Store credentials for automatic token refresh

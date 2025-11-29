@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Insecure collection: Publicly readable and writable
+    match /insecure_collection/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Secure collection: No access allowed
+    match /secure_collection/{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

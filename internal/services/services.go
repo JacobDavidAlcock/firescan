@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"firescan/internal/auth"
@@ -230,8 +231,9 @@ func testServiceWithAuth(result types.ServiceEnumResult, url string, state types
 }
 
 // replaceProjectID replaces {projectId} placeholder in URLs
-func replaceProjectID(url, projectID string) string {
-	return fmt.Sprintf(url, projectID)
+func replaceProjectID(urlStr, projectID string) string {
+	// Simple string replacement - project IDs are generally safe but good practice to check
+	return strings.ReplaceAll(urlStr, "{projectId}", projectID)
 }
 
 // GetServiceByName returns a specific service configuration by name

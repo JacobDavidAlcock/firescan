@@ -10,32 +10,43 @@ import (
 	"firescan/internal/types"
 )
 
-// CheckHostingConfig checks if firebase.json is publicly accessible
+// CheckHostingConfig checks if sensitive files are publicly accessible on Firebase Hosting
 func CheckHostingConfig(results chan<- types.Finding, errors chan<- types.ScanError, wg *sync.WaitGroup) {
 	defer wg.Done()
 	state := config.GetState()
-	url := fmt.Sprintf("https://%s.web.app/firebase.json", state.ProjectID)
+	baseURL := fmt.Sprintf("https://%s.web.app", state.ProjectID)
 
-	resp, err := httpclient.Get(url)
-	if resp != nil {
-		defer resp.Body.Close()
+	sensitiveFiles := []string{
+		"/firebase.json",
+		"/.git/HEAD",
+		"/.env",
+		"/package.json",
+		"/node_modules/package.json",
+		"/src/config.js",
+		"/src/config.ts",
+		"/webpack.config.js",
+		"/README.md",
 	}
-	if err != nil {
-		errors <- types.ScanError{
-			Timestamp: time.Now().Format(time.RFC3339),
-			JobType:   "Hosting",
-			Path:      url,
-			Message:   err.Error(),
+
+	for _, file := range sensitiveFiles {
+		url := baseURL + file
+		resp, err := httpclient.Get(url)
+		if resp != nil {
+			defer resp.Body.Close()
 		}
-		return
-	}
-	if resp.StatusCode == 200 {
-		results <- types.Finding{
-			Timestamp: time.Now().Format(time.RFC3339),
-			Severity:  "Medium",
-			Type:      "Hosting",
-			Path:      url,
-			Status:    "firebase.json is Public",
+		if err != nil {
+			// Don't report connection errors for every file, just log debug if needed
+			continue
+		}
+		
+		if resp.StatusCode == 200 {
+			results <- types.Finding{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Severity:  "Medium",
+				Type:      "Hosting",
+				Path:      url,
+				Status:    "Publicly Accessible",
+			}
 		}
 	}
 }

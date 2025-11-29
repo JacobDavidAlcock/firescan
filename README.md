@@ -98,7 +98,8 @@ Built-in wordlists: `users`, `config`, `passwords`, `functions`, `database`, `st
 | **Firestore** | Collection discovery, document enumeration, permission testing |
 | **Cloud Storage** | Bucket listing, file enumeration, ACL testing |
 | **Cloud Functions** | Function discovery across 7 regions, auth validation |
-| **Authentication** | Provider enumeration, JWT testing, token validation |
+| **Authentication** | Automated provider enumeration, JWT testing, token validation |
+| **Hosting** | Sensitive file detection (.git, .env, config files) |
 
 ## Safety Modes
 
@@ -165,7 +166,10 @@ go build -o firescan cmd/firescan/main.go
 ## Roadmap
 
 **Current (v2.1.0)**
-- Full service scanning (RTDB, Firestore, Storage, Functions, Auth)
+- Full service scanning (RTDB, Firestore, Storage, Functions, Auth, Hosting)
+- Enhanced Hosting scanner (sensitive file detection)
+- Automated Auth provider enumeration
+- CI/CD integration (non-interactive CLI mode)
 - Three safety modes
 - Session management and auto-refresh
 - Custom wordlists and JSON output
@@ -178,7 +182,6 @@ go build -o firescan cmd/firescan/main.go
 **Planned (v3.0.0)**
 - Firebase rules analyzer
 - Multi-project scanning
-- CI/CD integration
 - Continuous monitoring mode
 
 ## Legal

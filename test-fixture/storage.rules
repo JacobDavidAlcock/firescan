@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Insecure path: Publicly readable and writable
+    match /insecure/{allPaths=**} {
+      allow read, write: if true;
+    }
+    
+    // Secure path: No access allowed
+    match /secure/{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

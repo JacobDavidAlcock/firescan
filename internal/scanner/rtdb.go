@@ -14,35 +14,44 @@ import (
 // CheckRTDB checks a Realtime Database path for readability
 func CheckRTDB(job types.Job, results chan<- types.Finding, errors chan<- types.ScanError) {
 	state := config.GetState()
-	url := fmt.Sprintf("https://%s.firebaseio.com/%s.json?auth=%s", state.ProjectID, job.Path, state.Token)
+	
+	// Check both legacy and new database URL formats
+	databases := []string{state.ProjectID, fmt.Sprintf("%s-default-rtdb", state.ProjectID)}
+	
+	for _, dbName := range databases {
+		url := fmt.Sprintf("https://%s.firebaseio.com/%s.json?auth=%s", dbName, job.Path, state.Token)
 
-	resp, err := httpclient.Get(url)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-	if err != nil {
-		errors <- types.ScanError{
-			Timestamp: time.Now().Format(time.RFC3339),
-			JobType:   "RTDB",
-			Path:      job.Path,
-			Message:   err.Error(),
+		resp, err := httpclient.Get(url)
+		if resp != nil {
+			defer resp.Body.Close()
 		}
-		return
-	}
-	var body interface{}
-	json.NewDecoder(resp.Body).Decode(&body)
-	if body != nil {
-		if errorMap, ok := body.(map[string]interface{}); ok {
-			if _, isError := errorMap["error"]; isError {
-				return
+		if err != nil {
+			// Only report error if it's the primary database or if we're sure it exists
+			// For now, let's just log debug or ignore connection errors for the guess
+			continue
+		}
+		
+		// If 404, the database might not exist at this subdomain, continue to next
+		if resp.StatusCode == http.StatusNotFound {
+			continue
+		}
+
+		var body interface{}
+		json.NewDecoder(resp.Body).Decode(&body)
+		if body != nil {
+			if errorMap, ok := body.(map[string]interface{}); ok {
+				if _, isError := errorMap["error"]; isError {
+					continue
+				}
 			}
-		}
-		results <- types.Finding{
-			Timestamp: time.Now().Format(time.RFC3339),
-			Severity:  "High",
-			Type:      "RTDB",
-			Path:      job.Path,
-			Status:    "Readable",
+			results <- types.Finding{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Severity:  "High",
+				Type:      "RTDB",
+				Path:      fmt.Sprintf("https://%s.firebaseio.com/%s.json", dbName, job.Path),
+				Status:    "Readable",
+			}
+			return // Found it, stop checking other subdomains
 		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"firescan/internal/auth"
 	"firescan/internal/config"
+	"firescan/internal/httpclient"
 	"firescan/internal/types"
 )
 
@@ -18,20 +19,14 @@ func CheckFunction(job types.Job, results chan<- types.Finding, errors chan<- ty
 	state := config.GetState()
 	url := fmt.Sprintf("https://%s-%s.cloudfunctions.net/%s", region, state.ProjectID, funcName)
 
-	resp, err := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+	// 1. Check Unauthenticated (Public Access)
+	// We use httpclient directly to avoid adding Authorization header
+	resp, err := httpclient.Get(url)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
-	if err != nil {
-		errors <- types.ScanError{
-			Timestamp: time.Now().Format(time.RFC3339),
-			JobType:   "Function",
-			Path:      funcName,
-			Message:   err.Error(),
-		}
-		return
-	}
-	if resp.StatusCode == 200 {
+	
+	if err == nil && resp.StatusCode == 200 {
 		results <- types.Finding{
 			Timestamp: time.Now().Format(time.RFC3339),
 			Severity:  "Medium",
@@ -39,13 +34,38 @@ func CheckFunction(job types.Job, results chan<- types.Finding, errors chan<- ty
 			Path:      url,
 			Status:    "Publicly Invokable",
 		}
-	} else if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		results <- types.Finding{
-			Timestamp: time.Now().Format(time.RFC3339),
-			Severity:  "Informational",
-			Type:      "Function",
-			Path:      url,
-			Status:    "Exists (Auth Required)",
+		return
+	}
+
+	// 2. Check Authenticated (if unauth failed)
+	// Only if we have a token
+	if state.Token != "" {
+		respAuth, errAuth := auth.MakeAuthenticatedRequest("GET", url, state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+		if respAuth != nil {
+			defer respAuth.Body.Close()
+		}
+		if errAuth != nil {
+			// Don't report auth errors as scan errors, just debug log
+			return
+		}
+
+		if respAuth.StatusCode == 200 {
+			results <- types.Finding{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Severity:  "Informational",
+				Type:      "Function",
+				Path:      url,
+				Status:    "Exists (Auth Required)",
+			}
+		} else if respAuth.StatusCode == 403 {
+			// It exists but we don't have access
+			results <- types.Finding{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Severity:  "Informational",
+				Type:      "Function",
+				Path:      url,
+				Status:    "Exists (Access Denied)",
+			}
 		}
 	}
 }

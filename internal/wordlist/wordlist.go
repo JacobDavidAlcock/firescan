@@ -219,6 +219,7 @@ func GenerateCaseVariations(word string) []string {
 		return []string{}
 	}
 	variationsSet := make(map[string]bool)
+	variationsSet[word] = true // Preserve original
 	variationsSet[strings.ToLower(word)] = true
 	variationsSet[strings.ToUpper(string(word[0]))+strings.ToLower(word[1:])] = true
 	variationsSet[strings.ToUpper(word)] = true
@@ -233,10 +234,10 @@ func GenerateCaseVariations(word string) []string {
 func Load(listIdentifier string) ([]string, error) {
 	var baseList []string
 	if list, ok := DefaultLists[listIdentifier]; ok {
-		fmt.Printf("[*] Using built-in wordlist: %s\n", listIdentifier)
+		// fmt.Printf("[*] Using built-in wordlist: %s\n", listIdentifier)
 		baseList = list
 	} else if listIdentifier != "" {
-		fmt.Printf("[*] Using custom wordlist from: %s\n", listIdentifier)
+		// fmt.Printf("[*] Using custom wordlist from: %s\n", listIdentifier)
 		file, err := os.Open(listIdentifier)
 		if err != nil {
 			return nil, fmt.Errorf("could not find keyword or file at '%s'", listIdentifier)
