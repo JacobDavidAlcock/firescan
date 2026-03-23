@@ -35,6 +35,13 @@ func GetAPIKey() string {
 	return currentState.APIKey
 }
 
+// GetReferer returns the current referer
+func GetReferer() string {
+	stateMutex.RLock()
+	defer stateMutex.RUnlock()
+	return currentState.Referer
+}
+
 // GetToken returns the current token
 func GetToken() string {
 	stateMutex.RLock()
@@ -61,6 +68,13 @@ func SetAPIKey(apiKey string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 	currentState.APIKey = apiKey
+}
+
+// SetReferer sets the referer header value
+func SetReferer(referer string) {
+	stateMutex.Lock()
+	defer stateMutex.Unlock()
+	currentState.Referer = referer
 }
 
 // SetToken sets the authentication token
@@ -120,6 +134,7 @@ func LoadFromSession(session types.SavedSession) {
 
 	currentState.ProjectID = session.ProjectID
 	currentState.APIKey = session.APIKey
+	currentState.Referer = session.Referer
 	currentState.Email = session.Email
 	currentState.Password = session.Password
 }

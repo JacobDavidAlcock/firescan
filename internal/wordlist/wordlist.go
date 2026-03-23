@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// DefaultLists contains all the built-in wordlists exactly as in the original
+// DefaultLists contains all the built-in wordlists
 var DefaultLists = map[string][]string{
 	"users": {
 		// Basic user terms

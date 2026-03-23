@@ -2,7 +2,7 @@ package types
 
 import "time"
 
-// Color constants for terminal output - exactly as in original
+// Color constants for terminal output
 const (
 	ColorReset  = "\033[0m"
 	ColorRed    = "\033[31m"
@@ -12,10 +12,11 @@ const (
 	ColorBold   = "\033[1m"
 )
 
-// State holds the global configuration for the console session - exactly as in original
+// State holds the global configuration for the console session
 type State struct {
 	ProjectID string `yaml:"projectId"`
 	APIKey    string `yaml:"apiKey"`
+	Referer   string `yaml:"referer,omitempty"`
 	Token     string `yaml:"-"`
 	// Store credentials for automatic token refresh
 	Email    string `yaml:"-"`
@@ -25,7 +26,7 @@ type State struct {
 	EmailVerified bool   `yaml:"-"`
 }
 
-// Finding represents a discovered vulnerability - exactly as in original
+// Finding represents a discovered vulnerability
 type Finding struct {
 	Timestamp string `json:"timestamp"`
 	Severity  string `json:"severity"`
@@ -34,7 +35,7 @@ type Finding struct {
 	Status    string `json:"status"`
 }
 
-// Job represents a task for a worker - exactly as in original
+// Job represents a task for a worker
 type Job struct {
 	Type string
 	Path string
@@ -48,17 +49,18 @@ type ScanError struct {
 	Message   string
 }
 
-// SavedSession represents a saved authentication session - exactly as in original
+// SavedSession represents a saved authentication session
 type SavedSession struct {
 	Name      string    `yaml:"name"`
 	ProjectID string    `yaml:"projectID"`
 	APIKey    string    `yaml:"apiKey"`
+	Referer   string    `yaml:"referer,omitempty"`
 	Email     string    `yaml:"email"`
 	Password  string    `yaml:"password"`
 	SavedAt   time.Time `yaml:"savedAt"`
 }
 
-// SessionsFile represents the saved sessions file structure - exactly as in original
+// SessionsFile represents the saved sessions file structure
 type SessionsFile struct {
 	Sessions []SavedSession `yaml:"sessions"`
 }

@@ -26,6 +26,7 @@ func SaveSession(sessionName string) error {
 		Name:      sessionName,
 		ProjectID: state.ProjectID,
 		APIKey:    state.APIKey,
+		Referer:   state.Referer,
 		Email:     state.Email,
 		Password:  state.Password,
 		SavedAt:   time.Now(),

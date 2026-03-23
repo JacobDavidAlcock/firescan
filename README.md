@@ -55,6 +55,13 @@ firescan
 > scan --all
 ```
 
+**API Key Restrictions:**
+If your Firebase API key has HTTP referrer restrictions enabled, you'll need to set a referer header:
+```bash
+> set referer http://localhost        # Most Firebase projects allow localhost
+> set referer https://your-domain.com # Or use your actual domain
+```
+
 ## Commands
 
 **Authentication:**

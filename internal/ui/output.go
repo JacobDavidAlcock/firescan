@@ -7,7 +7,7 @@ import (
 	"firescan/internal/types"
 )
 
-// PrintJSON prints findings in JSON format exactly as in original
+// PrintJSON prints findings in JSON format
 func PrintJSON(findings []types.Finding) {
 	output, err := json.MarshalIndent(findings, "", "  ")
 	if err != nil {

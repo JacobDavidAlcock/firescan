@@ -24,7 +24,7 @@ import (
 	"firescan/internal/wordlist"
 )
 
-// HandleSet handles the 'set' command exactly as in original
+// HandleSet handles the 'set' command
 func HandleSet(args []string) {
 	if len(args) != 2 {
 		fmt.Println("Usage: set <VARIABLE> <VALUE>")
@@ -46,6 +46,11 @@ func HandleSet(args []string) {
 			fmt.Println("   Setting anyway, but this may cause authentication issues.")
 		}
 		config.SetAPIKey(value)
+	case "referer":
+		config.SetReferer(value)
+		fmt.Printf("[*] Referer header set to: %s\n", value)
+		fmt.Println("   This will be sent with all authentication API requests.")
+		return
 	case "token":
 		if err := validation.ValidateJWT(value); err != nil {
 			fmt.Printf("⚠️  Warning: %v\n", err)
@@ -53,13 +58,13 @@ func HandleSet(args []string) {
 		}
 		config.SetToken(value)
 	default:
-		fmt.Printf("❌ Unknown variable: %s. Available: projectID, apiKey, token\n", variable)
+		fmt.Printf("❌ Unknown variable: %s. Available: projectID, apiKey, referer, token\n", variable)
 		return
 	}
 	fmt.Printf("[*] %s => %s\n", variable, value)
 }
 
-// HandleShow handles the 'show' command exactly as in original
+// HandleShow handles the 'show' command
 func HandleShow(args []string) {
 	if len(args) == 0 || strings.ToLower(args[0]) != "options" {
 		fmt.Println("Usage: show options")
@@ -71,11 +76,16 @@ func HandleShow(args []string) {
 	fmt.Println("\n--- Current Session Configuration ---")
 	fmt.Printf("  projectID : %s\n", state.ProjectID)
 	fmt.Printf("  apiKey    : %s\n", config.MaskString(state.APIKey, 4, 4))
+	refererDisplay := state.Referer
+	if refererDisplay == "" {
+		refererDisplay = "(not set - may cause issues with API key restrictions)"
+	}
+	fmt.Printf("  referer   : %s\n", refererDisplay)
 	fmt.Printf("  token     : %s\n", config.MaskString(state.Token, 8, 8))
 	fmt.Println("-----------------------------------")
 }
 
-// HandleAuth handles the 'auth' command exactly as in original
+// HandleAuth handles the 'auth' command
 func HandleAuth(args []string) {
 	if len(args) > 0 {
 		if strings.ToLower(args[0]) == "logout" {
@@ -155,9 +165,25 @@ func HandleAuth(args []string) {
 		return
 	}
 
+	// Provide helpful referer guidance if not set
+	if config.GetReferer() == "" {
+		fmt.Println("ℹ️  Tip: If authentication fails with 'referer blocked' error, set a referer header:")
+		fmt.Println("   set referer http://localhost")
+		fmt.Println("   (Many Firebase projects allow localhost by default)")
+		fmt.Println()
+	}
+
 	token, userID, emailVerified, err := auth.GetAuthToken(authEmail, authPassword, apiKey, *createAccount)
 	if err != nil {
 		fmt.Printf("❌ Authentication failed: %v\n", err)
+		// Check if it's a referer-related error
+		if strings.Contains(err.Error(), "referer") && strings.Contains(err.Error(), "blocked") {
+			fmt.Println()
+			fmt.Println("💡 This error occurs when your Firebase API key has HTTP referrer restrictions.")
+			fmt.Println("   To fix this, set a referer header that matches your API key restrictions:")
+			fmt.Println("   Example: set referer http://localhost")
+			fmt.Println("   Or:      set referer https://your-domain.com")
+		}
 		return
 	}
 
@@ -670,7 +696,7 @@ func printServiceResults(results []types.ServiceEnumResult) {
 	}
 }
 
-// HandleExtract handles the 'extract' command exactly as in original
+// HandleExtract handles the 'extract' command
 func HandleExtract(args []string) {
 	extractFlags := flag.NewFlagSet("extract", flag.ContinueOnError)
 	isFirestore := extractFlags.Bool("firestore", false, "Extract from a Firestore collection.")
@@ -884,7 +910,7 @@ func HandleWrite(args []string) {
 	}
 }
 
-// HandleWordlist handles the 'wordlist' command exactly as in original
+// HandleWordlist handles the 'wordlist' command
 func HandleWordlist(args []string) {
 	if len(args) == 0 {
 		fmt.Println("Usage: wordlist <show|add> [options]")
@@ -928,7 +954,7 @@ func HandleWordlist(args []string) {
 	}
 }
 
-// HandleMakeConfig handles the 'make-config' command exactly as in original
+// HandleMakeConfig handles the 'make-config' command
 func HandleMakeConfig() {
 	exampleConfig := `
 # firescan configuration file
@@ -941,6 +967,11 @@ projectID: ""
 
 # Your Firebase Web API Key (found in the firebaseConfig object in client-side JS)
 apiKey: ""
+
+# Referer header for API key restrictions (optional)
+# Set this if your Firebase API key has HTTP referrer restrictions enabled
+# Common values: http://localhost, https://your-domain.com
+# referer: "http://localhost"
 `
 	fmt.Println(exampleConfig)
 }

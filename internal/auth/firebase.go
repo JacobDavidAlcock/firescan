@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"firescan/internal/config"
 	"firescan/internal/httpclient"
 )
 
@@ -46,7 +47,20 @@ func SignIn(email, password, apiKey string) (string, string, bool, error) {
 // executeAuthRequest performs basic auth request (legacy function)
 func executeAuthRequest(url string, payload map[string]string) (string, error) {
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set Referer header if configured
+	if referer := config.GetReferer(); referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+
+	resp, err := httpclient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -70,7 +84,20 @@ func executeAuthRequest(url string, payload map[string]string) (string, error) {
 // executeAuthRequestWithUserInfo performs auth request and returns user info
 func executeAuthRequestWithUserInfo(url string, payload map[string]string) (string, string, bool, error) {
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return "", "", false, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set Referer header if configured
+	if referer := config.GetReferer(); referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+
+	resp, err := httpclient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -145,7 +172,20 @@ func CheckEmailVerificationStatus(idToken, apiKey string) (bool, error) {
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return false, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set Referer header if configured
+	if referer := config.GetReferer(); referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+
+	resp, err := httpclient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -185,7 +225,20 @@ func SendEmailVerification(idToken, apiKey string) error {
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set Referer header if configured
+	if referer := config.GetReferer(); referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+
+	resp, err := httpclient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -253,7 +306,20 @@ func probeAuthProvider(provider, apiKey string) bool {
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
-	resp, err := httpclient.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return false
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set Referer header if configured
+	if referer := config.GetReferer(); referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+
+	resp, err := httpclient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}

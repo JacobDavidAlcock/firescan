@@ -15,7 +15,7 @@ import (
 	"firescan/internal/wordlist"
 )
 
-// FunctionRegions contains the Firebase function regions exactly as in original
+// FunctionRegions contains the Firebase function regions
 var FunctionRegions = []string{"us-central1", "us-east1", "us-east4", "europe-west1", "europe-west2", "asia-east2", "asia-northeast1"}
 
 // ScanOptions represents scan configuration options

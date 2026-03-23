@@ -10,7 +10,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
-// PrintBanner prints the ASCII art banner exactly as in original
+// PrintBanner prints the ASCII art banner
 func PrintBanner() {
 	asciiArt := "                                                /===-_---~~~~~~~~~------____\n" +
 		"                                               |===-~___                _,-'\n" +
@@ -55,10 +55,10 @@ func PrintBanner() {
 	fmt.Println(types.ColorCyan + fireScanLogo + types.ColorReset)
 }
 
-// PrintHelp prints the help menu exactly as in original
+// PrintHelp prints the help menu
 func PrintHelp() {
 	fmt.Println("\n--- FireScan Help Menu ---")
-	fmt.Println("  set <var> <val>       Set a configuration variable (projectID, apiKey, token).")
+	fmt.Println("  set <var> <val>       Set a configuration variable (projectID, apiKey, referer, token).")
 	fmt.Println("  show options          Display the current configuration.")
 	fmt.Println("  auth                  Authenticate to Firebase.")
 	fmt.Println("    --create-account      Create/use a test account (defaults to fire@scan.com).")
@@ -112,13 +112,14 @@ func PrintHelp() {
 	fmt.Println("--------------------------")
 }
 
-// RunConsole runs the interactive console exactly as in original
+// RunConsole runs the interactive console
 func RunConsole() error {
 	// Setup readline for a professional console experience.
 	completer := readline.NewPrefixCompleter(
 		readline.PcItem("set",
 			readline.PcItem("projectid"),
 			readline.PcItem("apikey"),
+			readline.PcItem("referer"),
 			readline.PcItem("token"),
 		),
 		readline.PcItem("show",
