@@ -63,27 +63,7 @@ func run() int {
 	// Check for non-interactive commands
 	args := flag.Args()
 	if len(args) > 0 {
-		command := args[0]
-		cmdArgs := args[1:]
-
-		switch command {
-		case "scan":
-			ui.HandleScan(cmdArgs)
-		case "auth":
-			ui.HandleAuth(cmdArgs)
-		case "extract":
-			ui.HandleExtract(cmdArgs)
-		case "write":
-			ui.HandleWrite(cmdArgs)
-		case "wordlist":
-			ui.HandleWordlist(cmdArgs)
-		case "help":
-			ui.PrintHelp()
-		default:
-			fmt.Printf("❌ Unknown command: %s\n", command)
-			return 1
-		}
-		return 0
+		return dispatchCommand(args[0], args[1:])
 	}
 
 	ui.PrintBanner()
@@ -93,6 +73,28 @@ func run() int {
 		return 1
 	}
 
+	return 0
+}
+
+// dispatchCommand runs a single non-interactive subcommand and returns the process exit code.
+func dispatchCommand(command string, cmdArgs []string) int {
+	switch command {
+	case "scan":
+		ui.HandleScan(cmdArgs)
+	case "auth":
+		ui.HandleAuth(cmdArgs)
+	case "extract":
+		ui.HandleExtract(cmdArgs)
+	case "write":
+		ui.HandleWrite(cmdArgs)
+	case "wordlist":
+		ui.HandleWordlist(cmdArgs)
+	case "help":
+		ui.PrintHelp()
+	default:
+		fmt.Printf("❌ Unknown command: %s\n", command)
+		return 1
+	}
 	return 0
 }
 
