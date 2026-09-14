@@ -87,3 +87,6 @@ output.txt
 e2e_output*.txt
 custom_wordlist.txt
 /test-fixture/functions/node_modules
+
+# Benchmark harness (controls a real Firebase project + holds credentials)
+/benchmark/
