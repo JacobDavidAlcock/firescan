@@ -17,7 +17,6 @@
 [![License](https://img.shields.io/github/license/JacobDavidAlcock/firescan)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/JacobDavidAlcock/firescan)](go.mod)
 [![Build Status](https://github.com/JacobDavidAlcock/firescan/workflows/Test/badge.svg)](https://github.com/JacobDavidAlcock/firescan/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/JacobDavidAlcock/firescan)](https://goreportcard.com/report/github.com/JacobDavidAlcock/firescan)
 
 <img src="demo.gif" alt="FireScan Demo" width="800px">
 
