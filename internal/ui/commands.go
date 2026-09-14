@@ -380,6 +380,7 @@ func HandleScan(args []string) {
 	// Run new security tests
 	totalFindings := 0
 	totalFindings += len(traditionalFindings)
+	allFindings := append([]types.Finding{}, traditionalFindings...)
 
 	// Rules testing
 	if *rulesTest {
@@ -399,6 +400,7 @@ func HandleScan(args []string) {
 			fmt.Printf("❌ Error during rules testing: %v\n", err)
 		} else {
 			totalFindings += len(ruleResults)
+			allFindings = append(allFindings, rulesFindings(ruleResults)...)
 			if !*jsonOutput {
 				printRuleResults(ruleResults)
 			}
@@ -426,6 +428,7 @@ func HandleScan(args []string) {
 			fmt.Printf("❌ Error during write testing: %v\n", err)
 		} else {
 			totalFindings += len(writeResults)
+			allFindings = append(allFindings, writeFindings(writeResults)...)
 			if !*jsonOutput {
 				printWriteResults(writeResults)
 			}
@@ -442,14 +445,11 @@ func HandleScan(args []string) {
 			fmt.Printf("❌ Error during services enumeration: %v\n", err)
 		} else {
 			totalFindings += len(serviceResults)
+			allFindings = append(allFindings, servicesFindings(serviceResults)...)
 			if !*jsonOutput {
 				printServiceResults(serviceResults)
 			}
 		}
-	}
-
-	if *jsonOutput {
-		PrintJSON(traditionalFindings)
 	}
 
 	// App Check testing
@@ -462,6 +462,7 @@ func HandleScan(args []string) {
 			fmt.Printf("❌ Error during App Check testing: %v\n", err)
 		} else {
 			totalFindings += len(appCheckResults)
+			allFindings = append(allFindings, appCheckFindings(appCheckResults)...)
 			if !*jsonOutput {
 				appcheck.FormatAppCheckResults(appCheckResults)
 			}
@@ -481,6 +482,7 @@ func HandleScan(args []string) {
 				fmt.Printf("❌ Error during advanced auth testing: %v\n", err)
 			} else {
 				totalFindings += len(authResults)
+				allFindings = append(allFindings, authAttackFindings(authResults)...)
 				if !*jsonOutput {
 					auth.FormatAuthAttackResults(authResults)
 				}
@@ -500,6 +502,7 @@ func HandleScan(args []string) {
 			// Count all security findings (accessible or data exposure)
 			unauthFindingsCount := unauth.CountUnauthFindings(unauthResults)
 			totalFindings += unauthFindingsCount
+			allFindings = append(allFindings, unauthFindings(unauthResults)...)
 		}
 	}
 
@@ -518,6 +521,7 @@ func HandleScan(args []string) {
 					totalFindings++
 				}
 			}
+			allFindings = append(allFindings, storageSecFindings(storageResults)...)
 		}
 	}
 
@@ -536,6 +540,7 @@ func HandleScan(args []string) {
 					totalFindings++
 				}
 			}
+			allFindings = append(allFindings, managementFindings(mgmtResults)...)
 		}
 	}
 
@@ -554,6 +559,7 @@ func HandleScan(args []string) {
 					totalFindings++
 				}
 			}
+			allFindings = append(allFindings, rtdbAdvancedFindings(rtdbResults)...)
 		}
 	}
 
@@ -572,10 +578,13 @@ func HandleScan(args []string) {
 					totalFindings++
 				}
 			}
+			allFindings = append(allFindings, fcmFindings(fcmResults)...)
 		}
 	}
 
-	if !*jsonOutput {
+	if *jsonOutput {
+		PrintJSON(allFindings)
+	} else {
 		fmt.Printf("\n\n✅ Scan complete. Found %d total findings.\n", totalFindings)
 	}
 }
