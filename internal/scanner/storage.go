@@ -60,7 +60,7 @@ func CheckCloudStorage(results chan<- types.Finding, errors chan<- types.ScanErr
 // CheckStoragePath checks if a specific path in Cloud Storage is accessible
 func CheckStoragePath(job types.Job, results chan<- types.Finding, errors chan<- types.ScanError) {
 	state := config.GetState()
-	
+
 	// Check both legacy and new bucket domains
 	buckets := []string{
 		fmt.Sprintf("%s.appspot.com", state.ProjectID),
@@ -77,13 +77,13 @@ func CheckStoragePath(job types.Job, results chan<- types.Finding, errors chan<-
 		if resp != nil {
 			defer resp.Body.Close()
 		}
-		
+
 		// If 404, the bucket might not exist or the file doesn't exist.
 		// If the bucket doesn't exist, we should try the next one.
 		// But how to distinguish "bucket not found" from "file not found"?
 		// GCS returns 404 for both.
 		// However, if we get 200, we found it!
-		
+
 		if err == nil && resp.StatusCode == 200 {
 			results <- types.Finding{
 				Timestamp: time.Now().Format(time.RFC3339),

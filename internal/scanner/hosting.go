@@ -38,7 +38,7 @@ func CheckHostingConfig(results chan<- types.Finding, errors chan<- types.ScanEr
 			// Don't report connection errors for every file, just log debug if needed
 			continue
 		}
-		
+
 		if resp.StatusCode == 200 {
 			results <- types.Finding{
 				Timestamp: time.Now().Format(time.RFC3339),

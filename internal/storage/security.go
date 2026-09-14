@@ -116,7 +116,7 @@ func testCORSMisconfigurations(state types.State, mode types.ScanMode) []Storage
 
 		for _, origin := range testOrigins {
 			result := testCORSOrigin(bucket, origin, state)
-			
+
 			// Only show and append finding if we haven't seen this type for this bucket yet
 			if result.Finding != "" {
 				isWildcard := strings.Contains(result.Finding, "wildcard")

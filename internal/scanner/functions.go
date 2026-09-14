@@ -25,7 +25,7 @@ func CheckFunction(job types.Job, results chan<- types.Finding, errors chan<- ty
 	if resp != nil {
 		defer resp.Body.Close()
 	}
-	
+
 	if err == nil && resp.StatusCode == 200 {
 		results <- types.Finding{
 			Timestamp: time.Now().Format(time.RFC3339),

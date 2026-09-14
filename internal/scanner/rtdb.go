@@ -14,10 +14,10 @@ import (
 // CheckRTDB checks a Realtime Database path for readability
 func CheckRTDB(job types.Job, results chan<- types.Finding, errors chan<- types.ScanError) {
 	state := config.GetState()
-	
+
 	// Check both legacy and new database URL formats
 	databases := []string{state.ProjectID, fmt.Sprintf("%s-default-rtdb", state.ProjectID)}
-	
+
 	for _, dbName := range databases {
 		url := fmt.Sprintf("https://%s.firebaseio.com/%s.json?auth=%s", dbName, job.Path, state.Token)
 
@@ -30,7 +30,7 @@ func CheckRTDB(job types.Job, results chan<- types.Finding, errors chan<- types.
 			// For now, let's just log debug or ignore connection errors for the guess
 			continue
 		}
-		
+
 		// If 404, the database might not exist at this subdomain, continue to next
 		if resp.StatusCode == http.StatusNotFound {
 			continue

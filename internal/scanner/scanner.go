@@ -86,7 +86,7 @@ func RunScan(options ScanOptions) ([]types.Finding, error) {
 		totalChecks += len(wordlistItems) * len(FunctionRegions)
 	}
 	if options.StorageTest {
-		totalChecks++ // Bucket check
+		totalChecks++                     // Bucket check
 		totalChecks += len(wordlistItems) // Object checks
 	}
 	if options.HostingTest {
