@@ -12,9 +12,9 @@ import (
 
 func TestRulesFindings(t *testing.T) {
 	results := []types.RuleTestResult{
-		{TestCase: types.RuleTestCase{Path: "ok", Expected: true}, Actual: true},                     // matched, no finding
-		{TestCase: types.RuleTestCase{Path: "leaky", Expected: false}, Actual: true},                  // unexpectedly allowed -> High
-		{TestCase: types.RuleTestCase{Path: "overblocked", Expected: true}, Actual: false},            // unexpectedly denied -> Medium
+		{TestCase: types.RuleTestCase{Path: "ok", Expected: true}, Actual: true},                       // matched, no finding
+		{TestCase: types.RuleTestCase{Path: "leaky", Expected: false}, Actual: true},                   // unexpectedly allowed -> High
+		{TestCase: types.RuleTestCase{Path: "overblocked", Expected: true}, Actual: false},             // unexpectedly denied -> Medium
 		{TestCase: types.RuleTestCase{Path: "errored", Expected: false}, Actual: true, Error: errBoom}, // error -> excluded
 	}
 
