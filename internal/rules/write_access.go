@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"firescan/internal/auth"
@@ -70,9 +71,13 @@ func generateFirestoreWriteTests(mode types.ScanMode) []types.WriteTestCase {
 
 	testCases := []types.WriteTestCase{
 		{
+			// Firestore's createDocument (POST) targets a *collection*
+			// (parent, one path segment for a top-level collection) and
+			// assigns the new document's ID itself -- unlike update/delete
+			// below, this path must not include a document segment.
 			ID:          "firestore_create_document",
 			Service:     "firestore",
-			Path:        testPath + "/test-doc-create",
+			Path:        testPath,
 			Operation:   "create",
 			TestData:    testData,
 			Expected:    true,
@@ -235,10 +240,18 @@ func runWriteTest(testCase types.WriteTestCase, cleanup *types.TestCleanup) type
 func executeFirestoreWriteTest(testCase types.WriteTestCase) types.WriteTestResult {
 	state := config.GetState()
 
-	// Generate test document ID
-	testDocID := fmt.Sprintf("firescan-test-%d", time.Now().Unix())
-	url := fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s/%s",
-		state.ProjectID, testCase.Path, testDocID)
+	// testCase.Path already has a leading "/" (see safety.GenerateSafeTestPath),
+	// so trim it here to avoid a double slash after ".../documents".
+	//
+	// For "update"/"delete", Path is a full document reference (collection
+	// segment + doc-name segment, e.g. "firescan-test-xxx/test-doc-update")
+	// -- exactly what PATCH/DELETE address directly, no extra segment needed.
+	// "create" is different: Firestore's createDocument (POST) takes a
+	// *collection* as its parent and assigns the new document's own ID, so
+	// its Path (set in generateFirestoreWriteTests) is just one segment.
+	docPath := strings.TrimPrefix(testCase.Path, "/")
+	url := fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s",
+		state.ProjectID, docPath)
 
 	var resp *http.Response
 	var err error
@@ -258,14 +271,15 @@ func executeFirestoreWriteTest(testCase types.WriteTestCase) types.WriteTestResu
 			}
 		}
 
-		// POST to create document
-		resp, err = auth.MakeAuthenticatedRequestWithBody("POST",
-			fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s",
-				state.ProjectID, testCase.Path),
-			string(jsonData), state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+		// POST to create document (docPath is the parent collection here;
+		// Firestore assigns the new document's ID)
+		resp, err = auth.MakeAuthenticatedRequestWithBody("POST", url, string(jsonData),
+			state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
 
 	case "update":
-		// First create a document to update
+		// PATCH to a document path creates it if absent (Firestore merges/
+		// sets rather than requiring the doc to already exist), so this
+		// single call also covers "first create a document to update".
 		firestoreData := convertToFirestoreFormat(testCase.TestData)
 		jsonData, marshalErr := json.Marshal(map[string]interface{}{
 			"fields": firestoreData,
@@ -283,17 +297,15 @@ func executeFirestoreWriteTest(testCase types.WriteTestCase) types.WriteTestResu
 			state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
 
 	case "delete":
-		// First create a document to delete
+		// First create the document at docPath so there's something to
+		// delete (PATCH upserts, same as the update case above).
 		firestoreData := convertToFirestoreFormat(map[string]interface{}{"test": "data"})
 		jsonData, _ := json.Marshal(map[string]interface{}{
 			"fields": firestoreData,
 		})
 
-		// Create the document first
-		createResp, createErr := auth.MakeAuthenticatedRequestWithBody("POST",
-			fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s",
-				state.ProjectID, testCase.Path),
-			string(jsonData), state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
+		createResp, createErr := auth.MakeAuthenticatedRequestWithBody("PATCH", url, string(jsonData),
+			state.Token, state.Email, state.Password, state.APIKey, config.UpdateTokenInfo)
 		if createResp != nil {
 			createResp.Body.Close()
 		}
@@ -355,13 +367,17 @@ func executeRTDBWriteTest(testCase types.WriteTestCase) types.WriteTestResult {
 
 	// Generate test path
 	testPath := fmt.Sprintf("%s/firescan-test-%d", testCase.Path, time.Now().Unix())
-	url := fmt.Sprintf("https://%s.firebaseio.com/%s.json?auth=%s", state.ProjectID, testPath, state.Token)
+	// Projects created after Firebase's RTDB multi-database rollout only
+	// resolve at the "-default-rtdb" subdomain (see internal/rtdb/advanced.go,
+	// which already uses this form); the bare "<project>.firebaseio.com"
+	// used here previously 404s for any such project.
+	url := fmt.Sprintf("https://%s-default-rtdb.firebaseio.com/%s.json?auth=%s", state.ProjectID, testPath, state.Token)
 
 	var resp *http.Response
 	var err error
 
 	switch testCase.Operation {
-	case "create", "update":
+	case "create", "update", "write", "push":
 		// Convert test data to JSON
 		var jsonData []byte
 		if testCase.TestData != nil {
@@ -381,8 +397,14 @@ func executeRTDBWriteTest(testCase types.WriteTestCase) types.WriteTestResult {
 			}
 		}
 
-		// PUT to create/update data
-		req, reqErr := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
+		// PUT to set data at the exact path (create/update/write); POST to
+		// append a new auto-keyed child under it (push), matching RTDB's
+		// REST semantics for each operation.
+		method := "PUT"
+		if testCase.Operation == "push" {
+			method = "POST"
+		}
+		req, reqErr := http.NewRequest(method, url, bytes.NewBuffer(jsonData))
 		if reqErr != nil {
 			return types.WriteTestResult{
 				TestCase: testCase,
