@@ -17,6 +17,27 @@ import (
 	"firescan/internal/types"
 )
 
+var jsonMode bool
+
+// candidateBuckets returns the Cloud Storage bucket name(s) a Firebase
+// project might be using. Projects created before Firebase switched its
+// default bucket domain (mid-2024) use *.appspot.com; newer projects only
+// have *.firebasestorage.app (*.firebaseapp.com, used elsewhere in this
+// file previously, is a Hosting domain -- never a Storage bucket -- so
+// checks against it always hit a nonexistent bucket).
+func candidateBuckets(projectID string) []string {
+	return []string{
+		fmt.Sprintf("%s.appspot.com", projectID),
+		fmt.Sprintf("%s.firebasestorage.app", projectID),
+	}
+}
+
+// SetJSONMode suppresses this package's own finding output when enabled, so
+// it never corrupts machine-readable output (e.g. --json) sharing stdout.
+func SetJSONMode(enabled bool) {
+	jsonMode = enabled
+}
+
 // StorageSecurityResult represents storage security test results
 type StorageSecurityResult struct {
 	TestType    string
@@ -96,10 +117,7 @@ func TestStorageSecurity(mode types.ScanMode) ([]StorageSecurityResult, error) {
 func testCORSMisconfigurations(state types.State, mode types.ScanMode) []StorageSecurityResult {
 	var results []StorageSecurityResult
 
-	buckets := []string{
-		fmt.Sprintf("%s.appspot.com", state.ProjectID),
-		fmt.Sprintf("%s.firebaseapp.com", state.ProjectID),
-	}
+	buckets := candidateBuckets(state.ProjectID)
 
 	for _, bucket := range buckets {
 		// Track findings for this bucket to avoid duplicates
@@ -197,10 +215,7 @@ func testCORSOrigin(bucket, origin string, state types.State) StorageSecurityRes
 func testBucketACLs(state types.State, mode types.ScanMode) []StorageSecurityResult {
 	var results []StorageSecurityResult
 
-	buckets := []string{
-		fmt.Sprintf("%s.appspot.com", state.ProjectID),
-		fmt.Sprintf("%s.firebaseapp.com", state.ProjectID),
-	}
+	buckets := candidateBuckets(state.ProjectID)
 
 	for _, bucket := range buckets {
 		// Test bucket-level permissions without authentication
@@ -292,7 +307,11 @@ func testBucketAuthContexts(bucket string, state types.State, mode types.ScanMod
 func testDirectoryTraversal(state types.State, mode types.ScanMode) []StorageSecurityResult {
 	var results []StorageSecurityResult
 
-	bucket := fmt.Sprintf("%s.appspot.com", state.ProjectID)
+	// Only one bucket is checked here (unlike the CORS/ACL/enumeration
+	// checks above, which loop over candidateBuckets); firebasestorage.app
+	// is what every project created since Firebase's 2024 bucket-naming
+	// migration actually has, so it's the more broadly-correct default.
+	bucket := fmt.Sprintf("%s.firebasestorage.app", state.ProjectID)
 
 	// Directory traversal payloads (safe to test)
 	traversalPaths := []string{
@@ -370,7 +389,7 @@ func testPublicBucketEnumeration(state types.State, mode types.ScanMode) []Stora
 	// Test common bucket naming patterns
 	bucketPatterns := []string{
 		fmt.Sprintf("%s.appspot.com", state.ProjectID),
-		fmt.Sprintf("%s.firebaseapp.com", state.ProjectID),
+		fmt.Sprintf("%s.firebasestorage.app", state.ProjectID),
 		fmt.Sprintf("%s-backup", state.ProjectID),
 		fmt.Sprintf("%s-dev", state.ProjectID),
 		fmt.Sprintf("%s-staging", state.ProjectID),
@@ -431,7 +450,11 @@ func testFileUploadValidation(state types.State, mode types.ScanMode) []StorageS
 
 	fmt.Printf("[*] Testing file upload validation (will create test files for cleanup)\n")
 
-	bucket := fmt.Sprintf("%s.appspot.com", state.ProjectID)
+	// Only one bucket is checked here (unlike the CORS/ACL/enumeration
+	// checks above, which loop over candidateBuckets); firebasestorage.app
+	// is what every project created since Firebase's 2024 bucket-naming
+	// migration actually has, so it's the more broadly-correct default.
+	bucket := fmt.Sprintf("%s.firebasestorage.app", state.ProjectID)
 
 	// Safe test files
 	testFiles := []struct {
@@ -482,7 +505,11 @@ func testMaliciousFileUploads(state types.State, mode types.ScanMode) []StorageS
 	fmt.Printf("%s[!] DESTRUCTIVE TEST: Testing malicious file uploads%s\n", types.ColorRed, types.ColorReset)
 	fmt.Printf("%s[!] This may upload potentially harmful files to your storage%s\n", types.ColorRed, types.ColorReset)
 
-	bucket := fmt.Sprintf("%s.appspot.com", state.ProjectID)
+	// Only one bucket is checked here (unlike the CORS/ACL/enumeration
+	// checks above, which loop over candidateBuckets); firebasestorage.app
+	// is what every project created since Firebase's 2024 bucket-naming
+	// migration actually has, so it's the more broadly-correct default.
+	bucket := fmt.Sprintf("%s.firebasestorage.app", state.ProjectID)
 
 	// Malicious test payloads (DO NOT make these actually malicious in real testing)
 	maliciousTests := []struct {
@@ -615,7 +642,7 @@ func testMaliciousUpload(bucket, filename string, content []byte, contentType, t
 
 // showStorageFinding displays a storage security finding immediately
 func showStorageFinding(result StorageSecurityResult) {
-	if result.Finding == "" {
+	if result.Finding == "" || jsonMode {
 		return
 	}
 
