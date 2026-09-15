@@ -142,26 +142,52 @@ func MakeAuthenticatedRequest(method, url, token, email, password, apiKey string
 
 	// Note: We return resp to the caller, so caller must close resp.Body
 	if resp.StatusCode == http.StatusUnauthorized {
-		fmt.Println("\n[*] Token expired. Attempting to refresh...")
-
-		if email != "" && password != "" {
-			newToken, userID, emailVerified, err := SignIn(email, password, apiKey)
-			if err != nil {
-				return resp, fmt.Errorf("token refresh failed: %v", err)
-			}
-			fmt.Println("✓ Token refreshed successfully.")
-
-			// Update token via callback
-			if updateTokenFunc != nil {
-				updateTokenFunc(newToken, userID, emailVerified)
-			}
-
-			req.Header.Set("Authorization", "Bearer "+newToken)
-			return httpclient.Do(req)
+		if email == "" || password == "" {
+			return resp, fmt.Errorf("token expired, but no credentials available to refresh")
 		}
-		return resp, fmt.Errorf("token expired, but no credentials available to refresh")
+
+		newToken, err := refreshToken(token, email, password, apiKey, updateTokenFunc)
+		if err != nil {
+			return resp, fmt.Errorf("token refresh failed: %v", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+newToken)
+		return httpclient.Do(req)
 	}
 	return resp, nil
+}
+
+// refreshMu serializes token refreshes. A scan runs many requests
+// concurrently (see ScanOptions.Concurrency), all sharing one token; if it
+// expires, every worker in flight discovers the 401 at roughly the same
+// time. Without this lock each of them would independently re-verify the
+// password via SignIn, needlessly multiplying a single expiry into dozens
+// of sign-ins against Identity Toolkit's password-verification quota.
+var refreshMu sync.Mutex
+
+// refreshToken re-authenticates once per actual expiry. staleToken is the
+// token the caller observed as rejected; if another goroutine already
+// refreshed past it while this one was waiting for the lock, that newer
+// token is reused instead of signing in again.
+func refreshToken(staleToken, email, password, apiKey string, updateTokenFunc func(string, string, bool)) (string, error) {
+	refreshMu.Lock()
+	defer refreshMu.Unlock()
+
+	if current := config.GetToken(); current != "" && current != staleToken {
+		return current, nil
+	}
+
+	fmt.Println("\n[*] Token expired. Attempting to refresh...")
+	newToken, userID, emailVerified, err := SignIn(email, password, apiKey)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println("✓ Token refreshed successfully.")
+
+	if updateTokenFunc != nil {
+		updateTokenFunc(newToken, userID, emailVerified)
+	}
+	return newToken, nil
 }
 
 // CheckEmailVerificationStatus checks if an email is verified
