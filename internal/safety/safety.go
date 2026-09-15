@@ -101,6 +101,28 @@ func PerformCleanup(tc *types.TestCleanup) error {
 	return nil
 }
 
+var autoConfirm bool
+var jsonMode bool
+
+// SetJSONMode suppresses this package's own output when enabled, so it
+// never corrupts machine-readable output (e.g. --json) sharing stdout.
+func SetJSONMode(enabled bool) {
+	jsonMode = enabled
+}
+
+// SetAutoConfirm skips WarnUser's interactive y/N prompt when enabled. This
+// exists for non-interactive use (e.g. `scan --yes`, or scripted/CI runs):
+// without it, --test and --audit mode can never run outside a real
+// terminal, since the confirmation prompt reads from stdin via fmt.Scanln,
+// which returns an empty string (and so a default "no") the moment stdin
+// isn't an interactive session -- silently declining every write/audit test
+// before it runs a single case. It must be explicitly requested per scan,
+// never inferred from --json alone, since it bypasses a warning about
+// destructive operations.
+func SetAutoConfirm(enabled bool) {
+	autoConfirm = enabled
+}
+
 // WarnUser displays appropriate warnings based on scan mode
 func WarnUser(mode types.ScanMode) bool {
 	switch mode {
@@ -108,8 +130,30 @@ func WarnUser(mode types.ScanMode) bool {
 		// No warning needed for probe mode
 		return true
 	case types.TestMode:
+		if autoConfirm {
+			if !jsonMode {
+				fmt.Printf("%s⚠️  TEST MODE%s: proceeding automatically (--yes passed)\n", types.ColorYellow, types.ColorReset)
+			}
+			return true
+		}
+		if jsonMode {
+			// The interactive prompt below has no way to receive real input
+			// under --json (no TTY), so it would always decline anyway --
+			// skip straight to that outcome instead of printing the
+			// warning banner into the JSON stream first.
+			return false
+		}
 		return warnTestMode()
 	case types.AuditMode:
+		if autoConfirm {
+			if !jsonMode {
+				fmt.Printf("%s⚠️  AUDIT MODE%s: proceeding automatically (--yes passed)\n", types.ColorRed, types.ColorReset)
+			}
+			return true
+		}
+		if jsonMode {
+			return false
+		}
 		return warnAuditMode()
 	default:
 		fmt.Printf("%sUnknown scan mode%s\n", types.ColorRed, types.ColorReset)
