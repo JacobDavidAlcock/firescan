@@ -13,6 +13,14 @@ import (
 	"firescan/internal/types"
 )
 
+var jsonMode bool
+
+// SetJSONMode suppresses this package's own finding output when enabled, so
+// it never corrupts machine-readable output (e.g. --json) sharing stdout.
+func SetJSONMode(enabled bool) {
+	jsonMode = enabled
+}
+
 // ManagementSecurityResult represents Firebase Management API security test results
 type ManagementSecurityResult struct {
 	TestType    string
@@ -673,7 +681,7 @@ func getRequestBodyForEndpoint(path string) string {
 
 // showManagementFinding displays a Management API finding immediately
 func showManagementFinding(result ManagementSecurityResult) {
-	if result.Finding == "" {
+	if result.Finding == "" || jsonMode {
 		return
 	}
 

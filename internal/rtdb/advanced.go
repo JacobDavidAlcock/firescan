@@ -14,6 +14,14 @@ import (
 	"firescan/internal/types"
 )
 
+var jsonMode bool
+
+// SetJSONMode suppresses this package's own finding output when enabled, so
+// it never corrupts machine-readable output (e.g. --json) sharing stdout.
+func SetJSONMode(enabled bool) {
+	jsonMode = enabled
+}
+
 // RTDBAdvancedResult represents RTDB advanced security test results
 type RTDBAdvancedResult struct {
 	TestType      string
@@ -560,7 +568,7 @@ func testDeltaSyncBypass(path string, state types.State, requireAuth bool) Delta
 
 // showRTDBFinding displays an RTDB finding immediately
 func showRTDBFinding(result RTDBAdvancedResult) {
-	if result.Finding == "" {
+	if result.Finding == "" || jsonMode {
 		return
 	}
 

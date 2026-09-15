@@ -14,6 +14,14 @@ import (
 	"firescan/internal/types"
 )
 
+var jsonMode bool
+
+// SetJSONMode suppresses this package's own finding output when enabled, so
+// it never corrupts machine-readable output (e.g. --json) sharing stdout.
+func SetJSONMode(enabled bool) {
+	jsonMode = enabled
+}
+
 // FCMSecurityResult represents FCM security test results
 type FCMSecurityResult struct {
 	TestType      string
@@ -718,7 +726,7 @@ func testDynamicLinkEndpoint(endpoint string, state types.State, requireAuth boo
 
 // showFCMFinding displays an FCM finding immediately
 func showFCMFinding(result FCMSecurityResult) {
-	if result.Finding == "" {
+	if result.Finding == "" || jsonMode {
 		return
 	}
 

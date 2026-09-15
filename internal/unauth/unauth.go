@@ -12,6 +12,14 @@ import (
 	"firescan/internal/types"
 )
 
+var jsonMode bool
+
+// SetJSONMode suppresses this package's own finding output when enabled, so
+// it never corrupts machine-readable output (e.g. --json) sharing stdout.
+func SetJSONMode(enabled bool) {
+	jsonMode = enabled
+}
+
 // UnauthTestResult represents unauthenticated test results
 type UnauthTestResult struct {
 	Service     string
@@ -98,6 +106,10 @@ func TestUnauthenticated(mode types.ScanMode) ([]UnauthTestResult, error) {
 
 // showUnauthFinding displays a finding immediately in the same format as normal scans
 func showUnauthFinding(result UnauthTestResult) {
+	if jsonMode {
+		return
+	}
+
 	// Clear any status message before showing finding
 	status.ClearStatus()
 
