@@ -21,10 +21,12 @@ func run() int {
 	// Handle startup flags like --config and --resume before entering the interactive loop.
 	var configPath string
 	var resumeSession bool
+	var token string
 	var logFile string
 	var logLevel string
 	flag.StringVar(&configPath, "config", "", "Path to a YAML configuration file.")
 	flag.BoolVar(&resumeSession, "resume", false, "Resume from a saved session.")
+	flag.StringVar(&token, "token", "", "Use an already-obtained JWT instead of authenticating (e.g. for scripting many runs against one session without repeated sign-ins).")
 	flag.StringVar(&logFile, "log", "", "Path to log file (default: ./firescan.log).")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warning, error, critical.")
 	flag.Parse()
@@ -58,6 +60,10 @@ func run() int {
 		if len(flag.Args()) == 0 {
 			fmt.Printf("✓ Configuration loaded from %s\n", configPath)
 		}
+	}
+
+	if token != "" {
+		config.SetToken(token)
 	}
 
 	// Check for non-interactive commands
