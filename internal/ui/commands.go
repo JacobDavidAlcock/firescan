@@ -15,8 +15,10 @@ import (
 	"firescan/internal/management"
 	"firescan/internal/rtdb"
 	"firescan/internal/rules"
+	"firescan/internal/safety"
 	"firescan/internal/scanner"
 	"firescan/internal/services"
+	"firescan/internal/status"
 	"firescan/internal/storage"
 	"firescan/internal/types"
 	"firescan/internal/unauth"
@@ -247,6 +249,7 @@ func HandleScan(args []string) {
 	fcmTest := scanFlags.Bool("fcm", false, "Enable FCM & Push Notification security testing.")
 
 	jsonOutput := scanFlags.Bool("json", false, "Output results in JSON format.")
+	autoConfirm := scanFlags.Bool("yes", false, "Skip the interactive --test/--audit confirmation prompt (required for non-interactive/CI use of those modes).")
 	concurrency := scanFlags.Int("c", 50, "Set concurrency.")
 	rateLimit := scanFlags.Int("rate-limit", 0, "Rate limit in requests/second (0=unlimited, recommended: 10-50).")
 
@@ -262,6 +265,20 @@ func HandleScan(args []string) {
 	if *rateLimit > 0 && !*jsonOutput {
 		fmt.Printf("[*] Rate limiting enabled: %d requests/second\n", *rateLimit)
 	}
+
+	// These packages print their own "Vulnerability Found!" banners
+	// internally (scattered across many call sites, unlike the
+	// print-at-the-call-site modules below), so each needs to be told
+	// directly to suppress that output under --json or it corrupts the
+	// JSON stream.
+	status.SetJSONMode(*jsonOutput)
+	storage.SetJSONMode(*jsonOutput)
+	rtdb.SetJSONMode(*jsonOutput)
+	management.SetJSONMode(*jsonOutput)
+	fcm.SetJSONMode(*jsonOutput)
+	unauth.SetJSONMode(*jsonOutput)
+	safety.SetJSONMode(*jsonOutput)
+	safety.SetAutoConfirm(*autoConfirm)
 
 	// Determine scan mode
 	var scanMode types.ScanMode = types.ProbeMode // Default to probe mode
